@@ -13,7 +13,7 @@
 int getLength(char buffer[], int size) {
     int i = 0;
     int count = 0;
-    while(buffer[i] != '\0' && i < size) {
+    while(buffer[i] != '\0' && buffer[i] != '\n' && i < size) {
         count++;
         i++;
     }
@@ -24,8 +24,8 @@ void appendString(char *buffer, char *message, int size) {
     int i = 0;
     int length = getLength(message, size);
 
-    while(*(buffer + i) != '\0' && i < size - 1) {
-        if (length + i < size - 1) {
+    while((*(buffer + i) != '\0' && *(buffer + i) != '\n') && i < size) {
+        if (length + i < size) {
             *(message + length + i) = *(buffer + i);
         } else {
             printf("too long: %d", getLength(message, size));
@@ -33,18 +33,23 @@ void appendString(char *buffer, char *message, int size) {
         }
         i++;
     }
-    *(message + length + i) = '\0';
+    if (*(buffer + i) == '\n') {
+        *(message + length + i) = '\n';
+    } else {
+        *(message + length + i) = '\0';
+    }
 }
 
 int checkForNewline(char message[], int size) {
     int i = 0;
+    int count = 0; 
     while(i < size) {
         if (message[i] == '\n') {
-            return 1;
+            count++;
         }
         i++;
     }
-    return 0;
+    return count;
 }
 
 void addNewline(char *buffer) {
@@ -59,13 +64,19 @@ void resetArray(char *message, int size) {
     }
 }
 
-void getSendString(char *result, char *sendString) {
-    int i = 0; //sine INFO  is 5 spaces to the numbers
-    while(sendString[i] != '\0') {
-        *(result + i) = *(sendString + i);
-        i++;
-       
+//in case of multiple message are send, return the start of the last message
+int startOfINFOMessage(char buffer[], int size) {
+    int numberOfNewline = checkForNewline(buffer, size);
+    //Only one or no newline chararcter
+    if (numberOfNewline == 1 || numberOfNewline == 0) {
+        return 0;
     }
+    //more than one newline character
+    int i = 0;
+    while(i < size - 4 && buffer[i] != 'I' && buffer[i+1] != 'N' && buffer[i+2] != 'F' && buffer[i+3] != 'O') {
+        i++;
+    }
+    return i;
 }
 
 
@@ -129,48 +140,45 @@ int main(int argc, char* argv[]) {
 
                     char sendString[] = "IAM ";
                     appendString(nuId, sendString, MAX_SIZE);
-                    
-                    char result[getLength(sendString, MAX_SIZE)];
-                    getSendString(result, sendString);
-                    
-                    addNewline(result);
-                    send(sockfd, result, MAX_SIZE, 0);
-                    printf("\nSend: %s\n", result);
-                    send(sockfd, result, MAX_SIZE, 0);
+                    addNewline(sendString);
+                    //send(sockfd, result, MAX_SIZE, 0);
+                    printf("\nSend: %s\n", sendString);
+                    send(sockfd, sendString, getLength(sendString, MAX_SIZE) + 1, 0);
                 }
+                resetArray(buffer, MAX_SIZE); //reset Buffer
             }
         }
         looping = 1; 
         //respone to INFOs
         while(looping) {
             if (recv(sockfd, buffer, MAX_SIZE, 0) >= 0) {
-                printf("\nbuffer: %s", buffer);
-                printf("\nmessage: %s", messageBuff);
-                appendString(buffer, messageBuff, MAX_SIZE);
-                if(checkForNewline(messageBuff, MAX_SIZE) != 0) {
-                    printf("\nReceive: %s\n", messageBuff);
+                appendString((buffer + startOfINFOMessage(buffer, MAX_SIZE)), messageBuff, MAX_SIZE);
+
+                if(checkForNewline(buffer, MAX_SIZE) != 0) {
+                    printf("\nReceive: %s", messageBuff);
+                    
                     if (messageBuff[0]=='N' && messageBuff[1]=='U' && messageBuff[2]=='L' && messageBuff[3]=='L') {
                         //NULL case
-                        printf("NUll here");
+                        printf("\nNULL here");
                         resetArray(messageBuff, MAX_SIZE); //reset messageBuff
-                    } else if (messageBuff[0]=='K' && messageBuff[1]=='E' && messageBuff[2]=='Y') {
+                    }
+                    if(messageBuff[0]=='K' && messageBuff[1]=='E' && messageBuff[2]=='Y') {
                         //KEY case
                         printf("\nDone");
                         looping = 0;
-                    } else { 
+                    } 
+                    if (messageBuff[0]=='I' && messageBuff[1]=='N' && messageBuff[2]=='F' && messageBuff[3]=='O') { 
                         //REPLY case
                         char sendString[] = "REPLY ";
                         appendString((messageBuff + 5), sendString, MAX_SIZE);
-                        
+                        addNewline(sendString);
                         resetArray(messageBuff, MAX_SIZE); //reset messageBuff
-                        printf("\nSend: %s\n", sendString);
-                        char result[getLength(sendString, MAX_SIZE) + 1];
-                        getSendString(result, sendString);
-                        //printf("hhhh:%s", result);
-                        addNewline(result);
-                        send(sockfd, result, MAX_SIZE, 0);
+                        printf("Send: %.*s\n\n", getLength(sendString, MAX_SIZE), sendString);
+                        send(sockfd, sendString, getLength(sendString, MAX_SIZE) + 1, 0);
                     }
+
                 }
+                resetArray(buffer, MAX_SIZE); //reset Buffer
             }
         }
     }

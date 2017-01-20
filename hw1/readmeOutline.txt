@@ -2,7 +2,7 @@ README
 
 high level approach:
 
-After sending IAM NUID we loop (send and receive from server) until we receive the KEY: We have a buffer for message and what we receiv from socketfd goes to buffer. If the buffer contains a new line append starting from "INFO" in buffer to message (For in case the buffer is NULL 0000\nINFO 11111, we make sure to only append starting from the INFO ... ignoring the NULL part). IF there is no newline, we continue looping, appending any new message to buffer until we get a new line. We then reply with the appropriately message.
+After sending IAM NUID we loop (send and receive from server) until we receive the KEY: We have a buffer for message and what we receiv from socketfd goes to buffer. If the buffer contains a new line append starting from "INFO" in buffer to message (For in case the buffer is NULL 0000\nINFO 11111, we make sure to only append starting from the INFO ignoring the NULL part). IF there is no newline, we continue looping, appending any new message to buffer until we get a new line. We then reply with the appropriately message.
 
 challenges:
 - As C has no  proper string,  we had to manage the indexes of the character arrays.

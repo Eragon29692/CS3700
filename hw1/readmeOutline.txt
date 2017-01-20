@@ -1,21 +1,14 @@
 README
 
 high level approach:
-loop:
-- we have a buffer for message
-- receive from socketfd go to buffer
-- check buffer if it contain the new line
-    - no newline -> append buffer to message -> back to loop
-    - newline -> append starting from "INFO" of buffer to message (For in case buffer = NULL 0000\nINFO 11111, make sure only append starting from the INFO ... igonore the NULL part)
-    	- Reply with the appropriately message
+
+After sending IAM NUID we loop (send and receive from server) until we receive the KEY: We have a buffer for message and what we receiv from socketfd goes to buffer. If the buffer contains a new line append starting from "INFO" in buffer to message (For in case the buffer is NULL 0000\nINFO 11111, we make sure to only append starting from the INFO ... ignoring the NULL part). IF there is no newline, we continue looping, appending any new message to buffer until we get a new line. We then reply with the appropriately message.
 
 challenges:
-- no proper string in C, so we have to managing the indexes of the character arrays
-- no real string support so get subString or append String need to be defined as helper methods
-- we had errors: 
-    - sending too much garbage because we forget and get the len in send method as array size of 64
+- As C has no  proper string,  we had to manage the indexes of the character arrays.
+- This also required us to get subString or append String through helper methods we defined.
+- We had the error of sending too much garbage because we forget to set the correct length of the reply message (array size of 64).
     
 
-
-we tested the code agaisnt the server and make sure it ran multiple time correctly.
-we debugging our failures by printing out what error the server send back and was able to find the garbage sending along the send request.
+We ran the code with our NUIDs multiple times (10+ times) and ensured the key was consistent. We also ran the sample NUID 001234567 and compared it to the key others were getting on Piazza (as suggested by the prof). 
+We debugging our failures by printing out what error the server send back and was able to find the garbage sending along the send request. Also relying heavily on flags to find weird behavior in our code. 

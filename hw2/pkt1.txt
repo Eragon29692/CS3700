@@ -1,0 +1,11 @@
+ether_src 00:1c:0e:87:85:04
+ether_dst 01:80:c2:00:00:00
+type 0 # (0x0)
+flags 0 # (0x0)
+stp_root_pri 32868 # (0x8064)
+stp_root_cost 4 # (0x4)
+stp_bridge_pri 32868 # (0x8064)
+stp_port_id 32772 # (0x8004)
+stp_msg_age 256 # (0x100)
+stp_root_mac 00:1c:0e:87:78:00
+stp_bridge_mac 00:1c:0e:87:85:00

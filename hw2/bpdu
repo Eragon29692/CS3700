@@ -1,0 +1,45 @@
+#!/bin/python
+import sys
+import socket
+import time
+import threading
+import string
+import getpass
+import argparse
+import struct
+
+
+def ether_aton(a):
+    a = a.replace('-', ':')
+    b = map(lambda x: int(x,16), a.split(':'))
+    return reduce(lambda x,y: x+y, map(lambda x: struct.pack('B', x), b))
+
+def ether_ntoa(n):
+    return string.join(map(lambda x: "%02x" % x, 
+                           struct.unpack('6B', n)), ':')
+def print_hex(n):
+    return ":".join("{:02x}".format(ord(c)) for c in n)
+
+
+if sys.argv[1] == 'decode':
+    buff = sys.stdin.read()
+    print buff
+    #fields = struct.unpack('!6s6sH3BH BBBQIQHHHHH', sys.stdin.read())
+    a,b,c,d,e,f,g,h,i =  struct.unpack('6s 6s 2s 3s 2s s s s 8s', buff[0:30])
+    print 'a: %s' %(ether_ntoa(a))
+    print 'b: %s' %(ether_ntoa(b))
+    print 'c: %s' %(print_hex(c))
+    print 'd: %s' %(print_hex(d))
+    print 'e: %s' %(print_hex(e))
+    print 'f: %s' %(print_hex(f))
+    print 'g: %s' %(print_hex(g))
+    print 'h: %s' %(print_hex(h))
+    print 'i: %s' %(print_hex(i))
+
+
+
+
+    #for i in fields:
+    #    print i
+if sys.argv[1] == 'encode':
+    print 'encode'

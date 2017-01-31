@@ -81,6 +81,17 @@ class BPDU:
         print 'stp_msg_age: {}'.format(to_hex(self.stp_msg_age))
         print 'stp_root_mac: {}'.format(ether_ntoa(self.stp_root_mac))
         print 'stp_bridge_mac: {}'.format(ether_ntoa(self.stp_bridge_mac)) 
+        
+#converts the text file to list
+def convert_file_to_list(input):
+         complete =[]
+         output =[]
+         for line in input:
+          index=line.split()
+          output.append(index[-1])
+         for s in output:
+          complete.append(s.replace('(', '').replace(')', ''))
+         print complete
 
 
 if sys.argv[1] == 'decode':
@@ -98,13 +109,4 @@ if sys.argv[1] == 'decode':
   
 
 if sys.argv[1] == 'encode':
- output =[]
- file = sys.stdin.readlines()
- for line in file:
-  index=line.split()
-  output.append(index[-1])
-
- print output
- for x,s in output:
-  output[s]= output[s].replace('(', '').replace(')', '')
- print output
+ convert_file_to_list(sys.stdin.readlines())

@@ -26,10 +26,10 @@ def to_hex(n):
 #ethernet packet
 class Ether:
     #initialize class
-    def __init__(self):
-        self.dst = None
-        self.src = None
-        self.data = None
+    def __init__(self, dst = None, src = None, data = None):
+        self.dst = dst
+        self.src = src
+        self.data = data
 
     #decode the packet to get src and dst
     def decode(self, packet):
@@ -91,6 +91,7 @@ if sys.argv[1] == 'decode':
     etherPacket.print_packet()
     print ether_ntoa(etherPacket.dst)
     if (ether_ntoa(etherPacket.dst) == '01:80:c2:00:00:00'):
+        #if (struct.unpack())
         bpduPacket = BPDU()
         bpduPacket.decode(etherPacket.data)
         bpduPacket.print_packet()

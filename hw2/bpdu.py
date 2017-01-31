@@ -98,4 +98,13 @@ if sys.argv[1] == 'decode':
   
 
 if sys.argv[1] == 'encode':
-    print 'encode'
+ output =[]
+ file = sys.stdin.readlines()
+ for line in file:
+  index=line.split()
+  output.append(index[-1])
+
+ print output
+ for x,s in output:
+  output[s]= output[s].replace('(', '').replace(')', '')
+ print output

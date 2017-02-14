@@ -33,36 +33,18 @@ class BridgeTableEntry:
         self.port = port
         self.age = age
 
-
-#ethernet packet
-class Ether:
-    #initialize class
-    def __init__(self, dst = None, src = None, data = None):
-        self.dst = dst
-        self.src = src
-        self.data = data
-
-    #decode the packet to get src and dst
-    def decode(self, packet):
-        #get the 2 first 6 bytes addresses
-        self.dst, self.src = struct.unpack('6s 6s', packet[0:12])
-        #data starting from the 15th bytes after the 12 bytes addresses and 2 bytes of length
-        self.data = packet[14:]
-    
-    def encode(self):
-        #the last 4 zero is to default the length
-        return self.dst.replace(':', '') + self.src.replace(':', '') + '0026'
-    
-    #print out the src and dst
-    def print_packet(self):
-        print 'ether_src: %s' %(ether_ntoa(self.src))
-        print 'ether_dst: %s' %(ether_ntoa(self.dst))
- 
-           
+class PortInfo:
+    def __init__(self, socket, port, logic = 'Designated', forward = 'Listening', timer = 15):
+        self.socket = socket
+        self.port = port
+        self.logic = logic
+        self.forward = forward
+        self.timer = timer
                            
 def receive(s):
     global bridgeTable
     global sockets
+    global portInfos
     
     while True:
         dgram = s.recv(1500)
@@ -72,17 +54,21 @@ def receive(s):
         dst,src = struct.unpack('6s 6s', dgram[0:12])
         print 'received dgram from %s to %s:' % (ether_ntoa(src), ether_ntoa(dst))
         print string.join(map(lambda x: '%02x' % ord(x), buffer(dgram)[:]), ' ')
-        #print 'port: {}'.format(s.getsockname()[-2])
+
         fromPort = getPort(s)
-    
-        updateOrCreateTableEntry(bridgeTable, src, fromPort)
+        p = getPortInfo(fromPort)
+        if (p.forward == 'Learning' or p.forward == 'Forwarding'):     
+            updateOrCreateTableEntry(bridgeTable, src, fromPort)
         
-        if (ether_ntoa(dst) != '01:80:c2:00:00:00'):
-            sendToSocket = getSocketForForwarding(bridgeTable, sockets, dst, fromPort)
+        if (p.forward == 'Forwarding' and ether_ntoa(dst) != '01:80:c2:00:00:00'):
+            sendToSocket = getSocketForForwarding(bridgeTable, portInfos, dst, fromPort)
             for x in sendToSocket:
                 x.send(dgram)
 
-        
+
+                
+# learning bridge stuff     
+    
 def timeCounter():
     global currentTime
     global bridgeTable
@@ -94,7 +80,6 @@ def timeCounter():
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
 
 def containInTable(table, src):
-    #return len([x for x in table if x.mac == src]) != 0
     for x in table:
         if (x.mac == src):
             return x.port
@@ -110,28 +95,33 @@ def updateOrCreateTableEntry(bridgeTable, src, fromPort, age = 0):
         bridgeTable.append(BridgeTableEntry(src, fromPort))
 
 
-def getSocketForForwarding(bridgeTable, sockets, dst, fromPort):
+def getSocketForForwarding(bridgeTable, portInfos, dst, fromPort):
     if (containInTable(bridgeTable, dst) == -1):
-        return [x for x in sockets if fromPort != getPort(x)]
+        return [x.socket for x in portInfos if (fromPort != x.port and x.forward == 'Forwarding')]
     else:
-        return [x for x in sockets if containInTable(bridgeTable, dst) == getPort(x)]
+        return [x.socket for x in portInfos if (containInTable(bridgeTable, dst) == x.port and x.forward == 'Forwarding')]
 
 def getPort(socket):
     return socket.getsockname()[-2]
+    
+def getPortInfo(port):
+    global portInfos
+    
+    for x in portInfos:
+        if (port == x.port):
+            return x
+    return None
+    
 
-def test():
-    #global currentTime
-    while True:
-        print 'time: %d' %(currentTime)
-        time.sleep(1)
 
-
+# main
 if __name__ == '__main__':
     mymac = ether_aton(args.mymac[0])
     wirenums = args.wires
     currentTime = 0
     bridgeTable = []
     sockets = []
+    portInfos =[] 
 
     for wirenum in wirenums:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -141,7 +131,8 @@ if __name__ == '__main__':
             sys.exit(1)
         
         sockets.append(s)
-
+        portInfos.append(PortInfo(s, getPort(s)))
+        
         t = threading.Thread(target=receive, args=[s])
         t.daemon = True                   # so ^C works
         t.start()
@@ -149,12 +140,8 @@ if __name__ == '__main__':
     timeThread =  threading.Thread(target=timeCounter, args=())
     timeThread.daemon = True
     timeThread.start()    
-    
-   # testThread =  threading.Thread(target=test, args=())
-   # testThread.daemon = True
-   # testThread.start()
+
 
 
     while True:
         pass
-        

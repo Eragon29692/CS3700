@@ -65,7 +65,7 @@ class eBPDU:
 	    self.root_cost = int(to_hex(self.root_cost))
 		
 	def encode(self):
-	    return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + self.bridge_id + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+	    return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + format(self.root_cost, '08x').decode('hex') + self.bridge_pri + self.bridge_id + format(self.port_id, '04x').decode('hex') + format(self.msg_age, '04x').decode('hex') + '\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 						  
 
 class PortInfo:
@@ -75,20 +75,20 @@ class PortInfo:
         self.logic = logic
         self.forward = forward
         self.timer = timer
-	self.vector = vector
+	    self.vector = vector
 
  
 def isBetterBPDU(a, b):
     if (a.bridge_pri < b.bridge_pri):
-	return True
+	    return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id < b.bridge_id):
-	return True
+	    return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost < b.root_cost):
-	return True
+	    return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id < b.port_id):
-	return True
+	    return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id == b.port_id and a.local_port < b.local_port):
-	return True
+	    return True
     return False
 	
 def receive(s):
@@ -125,7 +125,7 @@ def timeCounter():
     global bridgeTable
     while True:
         time.sleep(1)
-        currentTime += 1;
+        currentTime += 1
         for x in bridgeTable:
             x.age += 1
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
@@ -152,8 +152,8 @@ def sendBPDU():
 	while True:
 	    time.sleep(2)
 	    for x in portInfos:
-		tmp.port_id = int(x.port)
-		x.socket.send(tmp.encode())
+		    tmp.port_id = int(x.port)
+		    x.socket.send(tmp.encode())
 	
 def eBPDUTimeout():
 	global portInfos
@@ -246,6 +246,10 @@ if __name__ == '__main__':
     timeThread.start()  
 
     timeThread =  threading.Thread(target=sendBPDU, args=())
+    timeThread.daemon = True
+    timeThread.start()
+
+    timeThread =  threading.Thread(target=eBPDUTimeout, args=())
     timeThread.daemon = True
     timeThread.start()
 

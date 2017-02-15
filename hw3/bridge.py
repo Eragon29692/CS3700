@@ -33,7 +33,7 @@ def ether_ntoa(n):
                            struct.unpack('6B', n)), ':')
 						   
 def encodeString(n):
-	return string.join(map(chr(lambda x: "%02x" % x, 
+	return string.join(chr(map(lambda x: "%02x" % x, 
                            struct.unpack('6B', n))), '')
                 
 #convert string to hex:... notation
@@ -58,14 +58,14 @@ class eBPDU:
 		self.msg_age = msg_age
 		self.local_port = local_port
 		
-	def decode(packet):
+	def decode(self, packet):
 	    self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', data[0:32])
 	    self.msg_age = int(to_hex(self.msg_age))
 	    self.port_id = int(to_hex(self.port_id))
 	    self.root_cost = int(to_hex(self.root_cost))
 		
-	def encode():
-	    return '\x01\x80\xc2\x00\x00\x00' + encodeString(self.bridge_id) + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + encodeString(self.root_id) + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + encodeString(self.bridge_id) + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+	def encode(self):
+	    return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + self.bridge_id + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 						  
 
 class PortInfo:
@@ -75,7 +75,7 @@ class PortInfo:
         self.logic = logic
         self.forward = forward
         self.timer = timer
-		self.vector = vector
+	self.vector = vector
 
  
 def isBetterBPDU(a, b):
@@ -133,8 +133,8 @@ def portTimer():
     while True:
         time.sleep(1)
         for x in portInfos:
-			if(x.timer > 0): 
-				x.timer -= 1
+	    if(x.timer > 0): 
+		x.timer -= 1
                 if (x.timer == 0):
                     if (x.forward == 'Learning'):
                         x.forward = 'Forwarding'
@@ -142,15 +142,15 @@ def portTimer():
                         x.timer = 15
                         x.forward = 'Learning'
                     
-def sendBPDB():
+def sendBPDU():
 	global portInfos
-	global my_bpdu
+	global bridge_bpdu
 	tmp = copy.deepcopy(my_bpdu)
 	while True:
-		time.sleep(2)
-		for x in portInfos:
-			tmp.port_id = x.port
-			x.socket.send(tmp.encode())
+	    time.sleep(2)
+	    for x in portInfos:
+		tmp.port_id = int(x.port)
+		x.socket.send(tmp.encode())
 	
 	
 		
@@ -197,10 +197,10 @@ if __name__ == '__main__':
     bridgeTable = []
     portInfos =[] 
     root_node = -1
-	my_bpdu = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac))
-	no_bridge = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac), None, 0, '\xff\xff')
+    my_bpdu = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac))
+    no_bridge = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac), None, 0, '\xff\xff')
 
-	bridge_bpdu = copy.deepcopy(my_bpdu)
+    bridge_bpdu = copy.deepcopy(my_bpdu)
 
     for wirenum in wirenums:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -224,6 +224,9 @@ if __name__ == '__main__':
     timeThread.daemon = True
     timeThread.start()  
 
+    timeThread =  threading.Thread(target=sendBPDU, args=())
+    timeThread.daemon = True
+    timeThread.start()
 
     while True:
         pass

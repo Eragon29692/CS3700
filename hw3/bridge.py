@@ -8,7 +8,7 @@ import string
 import getpass
 import argparse
 import struct
-
+import copy
 
 parser = argparse.ArgumentParser(description='Bridge - send packets across the "network"')
 parser.add_argument('mymac', metavar='ll:ll:ll:ll:ll:ll', type=str, nargs=1,
@@ -23,27 +23,76 @@ def ether_aton(a):
     b = map(lambda x: int(x,16), a.split(':'))
     return reduce(lambda x,y: x+y, map(lambda x: struct.pack('B', x), b))
 
+def ether_aton_2(a):
+    a = a.replace('-', ':')
+    b = map(lambda x: int(x,16), [a[i:i + 2] for i in range(0, len(a), 2)])
+    return reduce(lambda x,y: x+y, map(lambda x: struct.pack('B', x), b))
+	
 def ether_ntoa(n):
     return string.join(map(lambda x: "%02x" % x, 
                            struct.unpack('6B', n)), ':')
+						   
+def encodeString(n):
+	return string.join(map(chr(lambda x: "%02x" % x, 
+                           struct.unpack('6B', n))), '')
                 
+#convert string to hex:... notation
+def to_hex(n):
+    return '0x' + "".join(("{:02x}".format(ord(c))) for c in n)
+	
 class BridgeTableEntry:
     def __init__(self, mac, port, age = 0):
         self.mac = mac
         self.port = port
         self.age = age
 
+                           
+class eBPDU:
+	def __init__(self, local_port = -1, root_id = '', bridge_id = '', root_pri = None, root_cost = None, bridge_pri = '\x80\x00', port_id = None, msg_age = 0):
+		self.root_pri = root_pri
+		self.root_id = root_id
+		self.root_cost = root_cost
+		self.bridge_pri = bridge_pri
+		self.bridge_id = bridge_id
+		self.port_id = port_id
+		self.msg_age = msg_age
+		self.local_port = local_port
+		
+	def decode(packet):
+	    self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', data[0:32])
+	    self.msg_age = int(to_hex(self.msg_age))
+	    self.port_id = int(to_hex(self.port_id))
+	    self.root_cost = int(to_hex(self.root_cost))
+	    self.root_pri = encodeString(self.root_pri)
+	    self.bridge_pri = encodeString(self.bridge_pri)
+	def encode():
+	    return '\x01\x80\xc2\x00\x00\x00' + encodeString(self.bridge_id) + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + encodeString(self.root_id) + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + encodeString(self.bridge_id) + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+						  
+
 class PortInfo:
-    def __init__(self, socket, port, logic = 'Designated', forward = 'Listening', timer = 15):
+    def __init__(self, socket, port, logic = 'Designated', forward = 'Listening', timer = 15, vector = eBPDU()):
         self.socket = socket
         self.port = port
         self.logic = logic
         self.forward = forward
         self.timer = timer
-                           
+
+ 
+def isBetterBPDU(a, b):
+    if (a.bridge_pri < b.bridge_pri):
+	return True
+    if (a.bridge_pri == b.bridge_pri and a.bridge_id < b.bridge_id):
+	return True
+    if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost < b.root_cost):
+	return True
+    if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id < b.port_id):
+	return True
+    if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id == b.port_id and a.local_port < b.local_port):
+	return True
+    return False
+	
 def receive(s):
     global bridgeTable
-    global sockets
     global portInfos
     
     while True:
@@ -78,7 +127,23 @@ def timeCounter():
         for x in bridgeTable:
             x.age += 1
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
-
+		
+def portTimer():
+    global portInfos
+    while True:
+        time.sleep(1)
+        for x in portInfos:
+	    if(x.timer > 0): 
+		x.timer -= 1
+                if (x.timer == 0):
+                    if (x.forward == 'Learning'):
+                        x.forward = 'Forwarding'
+                    if (x.forward == 'Listening'):
+                        x.timer = 15
+                        x.forward = 'Learning'
+                    
+        
+		
 def containInTable(table, src):
     for x in table:
         if (x.mac == src):
@@ -120,8 +185,8 @@ if __name__ == '__main__':
     wirenums = args.wires
     currentTime = 0
     bridgeTable = []
-    sockets = []
     portInfos =[] 
+    root_node = -1
 
     for wirenum in wirenums:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -130,7 +195,7 @@ if __name__ == '__main__':
             print 'connection error'
             sys.exit(1)
         
-        sockets.append(s)
+        
         portInfos.append(PortInfo(s, getPort(s)))
         
         t = threading.Thread(target=receive, args=[s])
@@ -141,6 +206,9 @@ if __name__ == '__main__':
     timeThread.daemon = True
     timeThread.start()    
 
+    timeThread =  threading.Thread(target=portTimer, args=())
+    timeThread.daemon = True
+    timeThread.start()  
 
 
     while True:

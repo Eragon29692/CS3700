@@ -41,20 +41,6 @@ class PortInfo:
         self.forward = forward
         self.timer = timer
                            
-class eBPDU:
-	def __init__(self, root_pri, root_id, root_cost, bridge_pri, bridge_id, msg_age, local_port):
-		self.root_pri = root_pri
-		self.root_id = root_id
-		self.root_cost = root_cost
-		self.bridge_pri = self.bridge_pri
-		self.bridge_id = self.bridge_id
-		self.msg_age = msg_age
-		self.local_port = local_port
-		
-	def encode():
-		
-						   
-						   
 def receive(s):
     global bridgeTable
     global sockets

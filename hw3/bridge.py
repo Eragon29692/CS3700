@@ -15,9 +15,9 @@ parser.add_argument('mymac', metavar='ll:ll:ll:ll:ll:ll', type=str, nargs=1,
                     help='local MAC address')
 parser.add_argument('wires', metavar='W', type=int, nargs='+',
                     help='wire # to connect to')
-                   
-args = parser.parse_args() 
-                    
+
+args = parser.parse_args()
+
 def ether_aton(a):
     a = a.replace('-', ':')
     b = map(lambda x: int(x,16), a.split(':'))
@@ -66,7 +66,7 @@ class eBPDU:
         
     def encode(self):
         return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + format(self.root_cost, '08x').decode('hex') + self.bridge_pri + self.bridge_id + format(self.port_id, '04x').decode('hex') + format(self.msg_age, '04x').decode('hex') + '\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-                          
+
 
 class PortInfo:
     def __init__(self, socket, port, vector, logic = 'Designated', forward = 'Listening', timer = 15):
@@ -91,35 +91,75 @@ def isBetterBPDU(a, b):
         return True
     return False
 
+def isEqualBPDU(a, b):
+    if not isBetterBPDU(a, b) and not isBetterBPDU(b, a):
+        return True
+    else:
+        return False
+
 def receive(s):
     global bridgeTable
     global portInfos
-    
-    
+    global bridge_bpdu
+    global root_port
+
     while True:
         dgram = s.recv(1500)
         if not dgram:
             print 'lost connection'
             sys.exit(1)
-        dst,src = struct.unpack('6s 6s', dgram[0:12])
+        dst, src = struct.unpack('6s 6s', dgram[0:12])
         print 'received dgram from %s to %s:' % (ether_ntoa(src), ether_ntoa(dst))
         print string.join(map(lambda x: '%02x' % ord(x), buffer(dgram)[:]), ' ')
 
         fromPort = getPort(s)
         p = getPortInfo(fromPort)
-        if (p.forward == 'Learning' or p.forward == 'Forwarding'):     
+        if p.forward == 'Learning' or p.forward == 'Forwarding':
             updateOrCreateTableEntry(bridgeTable, src, fromPort)
-        
-        if (p.forward == 'Forwarding' and ether_ntoa(dst) != '01:80:c2:00:00:00'):
+
+        if p.forward == 'Forwarding' and ether_ntoa(dst) != '01:80:c2:00:00:00':
             sendToSocket = getSocketForForwarding(bridgeTable, portInfos, dst, fromPort)
             for x in sendToSocket:
                 x.send(dgram)
 
-        if (ether_ntoa(dst) == '01:80:c2:00:00:00'):
-                pass        
+        if ether_ntoa(dst) == '01:80:c2:00:00:00':
+            receivedBPDU = eBPDU()
+            receivedBPDU.decode(dgram)
+            
                 
-# learning bridge stuff     
-    
+            p.vector = copy.deepcopy(receivedBPDU)
+            p.vector.msg_age += 265
+            p.vector.local_port = fromPort
+            if isEqualBPDU(p.vector, bridge_bpdu):
+                bridge_bpdu.msg_age = p.vector.msg_age
+            #spanning tree operations
+            if isBetterBPDU(p.vector, bridge_bpdu):
+                bridge_bpdu.root_cost = p.vector.root_cost + 10
+                bridge_bpdu.msg_age = p.vector.msg_age
+                bridge_bpdu.local_port = p.vector.local_port
+                #should we update the bridge_id
+                root_port = fromPort
+            for x in portInfos:
+                if x.port == root_port:
+                    if x.logic != 'Root':
+                        x.logic = 'Root'
+                        x.forward = 'Listening'
+                        x.timer = 15
+                if x.port != root_port:
+                    if isBetterBPDU(bridge_bpdu, x.vector):
+                        if x.logic != 'Designated':
+                            x.logic = 'Designated'
+                            x.forward = 'Listening'
+                            x.timer = 15
+                    else:
+                        if x.logic != 'Blocked':
+                            x.logic = 'Blocked'
+                            x.timer = 0
+                            
+
+
+
+# learning bridge stuff
 def timeCounter():
     global currentTime
     global bridgeTable
@@ -129,32 +169,33 @@ def timeCounter():
         for x in bridgeTable:
             x.age += 1
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
-        
+
 def portTimer():
     global portInfos
     while True:
         time.sleep(1)
         for x in portInfos:
-        if(x.timer > 0): 
-        x.timer -= 1
+            if (x.timer > 0): 
+                x.timer -= 1
                 if (x.timer == 0):
                     if (x.forward == 'Learning'):
                         x.forward = 'Forwarding'
                     if (x.forward == 'Listening'):
                         x.timer = 15
                         x.forward = 'Learning'
-                    
+
 def sendBPDU():
     global portInfos
     global bridge_bpdu
-    global root_port
+    
     tmp = copy.deepcopy(bridge_bpdu)
     while True:
         time.sleep(2)
         for x in portInfos:
-        tmp.port_id = int(x.port)
-        x.socket.send(tmp.encode())
-    
+            tmp.port_id = int(x.port)
+            tmp.bridge_id = mymac
+            x.socket.send(tmp.encode())
+
 def eBPDUTimeout():
     global portInfos
     global no_bridge
@@ -164,14 +205,14 @@ def eBPDUTimeout():
         time.sleep(1)
         for x in portInfos:
             if(x.vector.msg_age > 0):
-            x.vector.msg_age += 1
-            if(x.vector.msg_age > 20):
+                x.vector.msg_age += 256
+            if(x.vector.msg_age > 20 * 256):
                 x.vector = copy.deepcopy(no_bridge)
         if(bridge_bpdu.msg_age > 0):
-            bridge_bpdu.msg_age += 1
-            if(bridge_bpdu.msg_age > 20):
-            bridge_bpdu = copy.deepcopy(my_bpdu)
-            root_port = -1
+            bridge_bpdu.msg_age += 256
+            if(bridge_bpdu.msg_age > 20 * 256):
+                bridge_bpdu = copy.deepcopy(my_bpdu)
+                root_port = -1
         
             
         

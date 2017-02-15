@@ -49,14 +49,14 @@ class BridgeTableEntry:
                            
 class eBPDU:
 	def __init__(self, local_port = -1, root_id = '00:00:00:00:00:00', bridge_id = '00:00:00:00:00:00', port_id = None, root_cost = 0, root_pri = '\x80\x00', bridge_pri = '\x80\x00', msg_age = 0):
-		self.root_pri = root_pri
-		self.root_id = ether_aton(root_id)
-		self.root_cost = root_cost
-		self.bridge_pri = bridge_pri
-		self.bridge_id = ether_aton(bridge_id)
-		self.port_id = port_id
-		self.msg_age = msg_age
-		self.local_port = local_port
+	    self.root_pri = root_pri
+	    self.root_id = ether_aton(root_id)
+	    self.root_cost = root_cost
+	    self.bridge_pri = bridge_pri
+	    self.bridge_id = ether_aton(bridge_id)
+	    self.port_id = port_id
+	    self.msg_age = msg_age
+	    self.local_port = local_port
 		
 	def decode(self, packet):
 	    self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', data[0:32])
@@ -75,20 +75,20 @@ class PortInfo:
         self.logic = logic
         self.forward = forward
         self.timer = timer
-	    self.vector = vector
+	self.vector = vector
 
  
 def isBetterBPDU(a, b):
     if (a.bridge_pri < b.bridge_pri):
-	    return True
+	return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id < b.bridge_id):
-	    return True
+	return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost < b.root_cost):
-	    return True
+	return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id < b.port_id):
-	    return True
+	return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id == b.port_id and a.local_port < b.local_port):
-	    return True
+	return True
     return False
 	
 def receive(s):
@@ -116,7 +116,7 @@ def receive(s):
                 x.send(dgram)
 
 		if (ether_ntoa(dst) == '01:80:c2:00:00:00'):
-			
+	            pass		
                 
 # learning bridge stuff     
     
@@ -135,8 +135,8 @@ def portTimer():
     while True:
         time.sleep(1)
         for x in portInfos:
-			if(x.timer > 0): 
-				x.timer -= 1
+	    if(x.timer > 0): 
+		x.timer -= 1
                 if (x.timer == 0):
                     if (x.forward == 'Learning'):
                         x.forward = 'Forwarding'
@@ -152,8 +152,8 @@ def sendBPDU():
 	while True:
 	    time.sleep(2)
 	    for x in portInfos:
-		    tmp.port_id = int(x.port)
-		    x.socket.send(tmp.encode())
+		tmp.port_id = int(x.port)
+		x.socket.send(tmp.encode())
 	
 def eBPDUTimeout():
 	global portInfos
@@ -163,15 +163,15 @@ def eBPDUTimeout():
 	while True:
 		time.sleep(1)
 		for x in portInfos:
-			if(x.vector.msg_age > 0):
-				x.vector.msg_age += 1
-				if(x.vector.msg_age > 20):
-					x.vector = copy.deepcopy(no_bridge)
+		    if(x.vector.msg_age > 0):
+			x.vector.msg_age += 1
+			if(x.vector.msg_age > 20):
+			    x.vector = copy.deepcopy(no_bridge)
 		if(bridge_bpdu.msg_age > 0):
-			bridge_bpdu.msg_age += 1
-			if(bridge_bpdu.msg_age > 20):
-				bridge_bpdu = copy.deepcopy(my_bpdu)
-				root_port = -1
+		    bridge_bpdu.msg_age += 1
+		    if(bridge_bpdu.msg_age > 20):
+			bridge_bpdu = copy.deepcopy(my_bpdu)
+			root_port = -1
 		
 			
 		

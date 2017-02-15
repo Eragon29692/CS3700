@@ -49,14 +49,14 @@ class BridgeTableEntry:
                            
 class eBPDU:
 	def __init__(self, local_port = -1, root_id = '00:00:00:00:00:00', bridge_id = '00:00:00:00:00:00', port_id = None, root_cost = 0, root_pri = '\x80\x00', bridge_pri = '\x80\x00', msg_age = 0):
-		self.root_pri = root_pri
-		self.root_id = ether_aton(root_id)
-		self.root_cost = root_cost
-		self.bridge_pri = bridge_pri
-		self.bridge_id = ether_aton(bridge_id)
-		self.port_id = port_id
-		self.msg_age = msg_age
-		self.local_port = local_port
+	    self.root_pri = root_pri
+	    self.root_id = ether_aton(root_id)
+	    self.root_cost = root_cost
+	    self.bridge_pri = bridge_pri
+	    self.bridge_id = ether_aton(bridge_id)
+	    self.port_id = port_id
+	    self.msg_age = msg_age
+	    self.local_port = local_port
 		
 	def decode(self, packet):
 	    self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', data[0:32])
@@ -65,7 +65,7 @@ class eBPDU:
 	    self.root_cost = int(to_hex(self.root_cost))
 		
 	def encode(self):
-	    return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + self.bridge_id + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+	    return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + format(self.root_cost, '08x').decode('hex') + self.bridge_pri + self.bridge_id + format(self.port_id, '04x').decode('hex') + format(self.msg_age, '04x').decode('hex') + '\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 						  
 
 class PortInfo:
@@ -95,6 +95,7 @@ def receive(s):
     global bridgeTable
     global portInfos
     
+	
     while True:
         dgram = s.recv(1500)
         if not dgram:
@@ -114,7 +115,8 @@ def receive(s):
             for x in sendToSocket:
                 x.send(dgram)
 
-
+		if (ether_ntoa(dst) == '01:80:c2:00:00:00'):
+	            pass		
                 
 # learning bridge stuff     
     
@@ -123,7 +125,7 @@ def timeCounter():
     global bridgeTable
     while True:
         time.sleep(1)
-        currentTime += 1;
+        currentTime += 1
         for x in bridgeTable:
             x.age += 1
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
@@ -145,14 +147,33 @@ def portTimer():
 def sendBPDU():
 	global portInfos
 	global bridge_bpdu
-	tmp = copy.deepcopy(my_bpdu)
+	global root_port
+	tmp = copy.deepcopy(bridge_bpdu)
 	while True:
 	    time.sleep(2)
 	    for x in portInfos:
 		tmp.port_id = int(x.port)
 		x.socket.send(tmp.encode())
 	
-	
+def eBPDUTimeout():
+	global portInfos
+	global no_bridge
+	global bridge_bpdu
+	global root_port
+	while True:
+		time.sleep(1)
+		for x in portInfos:
+		    if(x.vector.msg_age > 0):
+			x.vector.msg_age += 1
+			if(x.vector.msg_age > 20):
+			    x.vector = copy.deepcopy(no_bridge)
+		if(bridge_bpdu.msg_age > 0):
+		    bridge_bpdu.msg_age += 1
+		    if(bridge_bpdu.msg_age > 20):
+			bridge_bpdu = copy.deepcopy(my_bpdu)
+			root_port = -1
+		
+			
 		
 def containInTable(table, src):
     for x in table:
@@ -196,7 +217,7 @@ if __name__ == '__main__':
     currentTime = 0
     bridgeTable = []
     portInfos =[] 
-    root_node = -1
+    root_port = -1
     my_bpdu = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac))
     no_bridge = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac), None, 0, '\xff\xff')
 
@@ -225,6 +246,10 @@ if __name__ == '__main__':
     timeThread.start()  
 
     timeThread =  threading.Thread(target=sendBPDU, args=())
+    timeThread.daemon = True
+    timeThread.start()
+
+    timeThread =  threading.Thread(target=eBPDUTimeout, args=())
     timeThread.daemon = True
     timeThread.start()
 

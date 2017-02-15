@@ -48,12 +48,12 @@ class BridgeTableEntry:
 
                            
 class eBPDU:
-	def __init__(self, local_port = -1, root_id = '', bridge_id = '', root_pri = None, root_cost = None, bridge_pri = '\x80\x00', port_id = None, msg_age = 0):
+	def __init__(self, local_port = -1, root_id = '00:00:00:00:00:00', bridge_id = '00:00:00:00:00:00', port_id = None, root_cost = 0, root_pri = '\x80\x00', bridge_pri = '\x80\x00', msg_age = 0):
 		self.root_pri = root_pri
-		self.root_id = root_id
+		self.root_id = ether_aton(root_id)
 		self.root_cost = root_cost
 		self.bridge_pri = bridge_pri
-		self.bridge_id = bridge_id
+		self.bridge_id = ether_aton(bridge_id)
 		self.port_id = port_id
 		self.msg_age = msg_age
 		self.local_port = local_port
@@ -63,19 +63,19 @@ class eBPDU:
 	    self.msg_age = int(to_hex(self.msg_age))
 	    self.port_id = int(to_hex(self.port_id))
 	    self.root_cost = int(to_hex(self.root_cost))
-	    self.root_pri = encodeString(self.root_pri)
-	    self.bridge_pri = encodeString(self.bridge_pri)
+		
 	def encode():
 	    return '\x01\x80\xc2\x00\x00\x00' + encodeString(self.bridge_id) + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + encodeString(self.root_id) + '\x00\x00\x00' + chr(self.root_cost) + self.bridge_pri + encodeString(self.bridge_id) + '\x00' + chr(self.port_id) + chr(self.msg_age) + '\x00\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 						  
 
 class PortInfo:
-    def __init__(self, socket, port, logic = 'Designated', forward = 'Listening', timer = 15, vector = eBPDU()):
+    def __init__(self, socket, port, vector, logic = 'Designated', forward = 'Listening', timer = 15):
         self.socket = socket
         self.port = port
         self.logic = logic
         self.forward = forward
         self.timer = timer
+		self.vector = vector
 
  
 def isBetterBPDU(a, b):
@@ -133,8 +133,8 @@ def portTimer():
     while True:
         time.sleep(1)
         for x in portInfos:
-	    if(x.timer > 0): 
-		x.timer -= 1
+			if(x.timer > 0): 
+				x.timer -= 1
                 if (x.timer == 0):
                     if (x.forward == 'Learning'):
                         x.forward = 'Forwarding'
@@ -142,7 +142,17 @@ def portTimer():
                         x.timer = 15
                         x.forward = 'Learning'
                     
-        
+def sendBPDB():
+	global portInfos
+	global my_bpdu
+	tmp = copy.deepcopy(my_bpdu)
+	while True:
+		time.sleep(2)
+		for x in portInfos:
+			tmp.port_id = x.port
+			x.socket.send(tmp.encode())
+	
+	
 		
 def containInTable(table, src):
     for x in table:
@@ -187,6 +197,10 @@ if __name__ == '__main__':
     bridgeTable = []
     portInfos =[] 
     root_node = -1
+	my_bpdu = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac))
+	no_bridge = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac), None, 0, '\xff\xff')
+
+	bridge_bpdu = copy.deepcopy(my_bpdu)
 
     for wirenum in wirenums:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
@@ -196,7 +210,7 @@ if __name__ == '__main__':
             sys.exit(1)
         
         
-        portInfos.append(PortInfo(s, getPort(s)))
+        portInfos.append(PortInfo(s, getPort(s), copy.deepcopy(no_bridge)))
         
         t = threading.Thread(target=receive, args=[s])
         t.daemon = True                   # so ^C works

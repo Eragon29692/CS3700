@@ -95,6 +95,7 @@ def receive(s):
     global bridgeTable
     global portInfos
     
+	
     while True:
         dgram = s.recv(1500)
         if not dgram:
@@ -114,7 +115,8 @@ def receive(s):
             for x in sendToSocket:
                 x.send(dgram)
 
-
+		if (ether_ntoa(dst) == '01:80:c2:00:00:00'):
+			
                 
 # learning bridge stuff     
     
@@ -133,8 +135,8 @@ def portTimer():
     while True:
         time.sleep(1)
         for x in portInfos:
-	    if(x.timer > 0): 
-		x.timer -= 1
+			if(x.timer > 0): 
+				x.timer -= 1
                 if (x.timer == 0):
                     if (x.forward == 'Learning'):
                         x.forward = 'Forwarding'
@@ -145,14 +147,33 @@ def portTimer():
 def sendBPDU():
 	global portInfos
 	global bridge_bpdu
-	tmp = copy.deepcopy(my_bpdu)
+	global root_port
+	tmp = copy.deepcopy(bridge_bpdu)
 	while True:
 	    time.sleep(2)
 	    for x in portInfos:
 		tmp.port_id = int(x.port)
 		x.socket.send(tmp.encode())
 	
-	
+def eBPDUTimeout():
+	global portInfos
+	global no_bridge
+	global bridge_bpdu
+	global root_port
+	while True:
+		time.sleep(1)
+		for x in portInfos:
+			if(x.vector.msg_age > 0):
+				x.vector.msg_age += 1
+				if(x.vector.msg_age > 20):
+					x.vector = copy.deepcopy(no_bridge)
+		if(bridge_bpdu.msg_age > 0):
+			bridge_bpdu.msg_age += 1
+			if(bridge_bpdu.msg_age > 20):
+				bridge_bpdu = copy.deepcopy(my_bpdu)
+				root_port = -1
+		
+			
 		
 def containInTable(table, src):
     for x in table:
@@ -196,7 +217,7 @@ if __name__ == '__main__':
     currentTime = 0
     bridgeTable = []
     portInfos =[] 
-    root_node = -1
+    root_port = -1
     my_bpdu = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac))
     no_bridge = eBPDU(-1, ether_ntoa(mymac), ether_ntoa(mymac), None, 0, '\xff\xff')
 

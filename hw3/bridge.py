@@ -59,10 +59,10 @@ class eBPDU:
         self.local_port = local_port
         
     def decode(self, packet):
-        self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', data[0:32])
-        self.msg_age = int(to_hex(self.msg_age))
-        self.port_id = int(to_hex(self.port_id))
-        self.root_cost = int(to_hex(self.root_cost))
+        self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', packet[0:46])
+        self.msg_age = int(to_hex(self.msg_age), 0)
+        self.port_id = int(to_hex(self.port_id), 0)
+        self.root_cost = int(to_hex(self.root_cost), 0)
         
     def encode(self):
         return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + format(self.root_cost, '08x').decode('hex') + self.bridge_pri + self.bridge_id + format(self.port_id, '04x').decode('hex') + format(self.msg_age, '04x').decode('hex') + '\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
@@ -123,12 +123,13 @@ def receive(s):
                 x.send(dgram)
 
         if ether_ntoa(dst) == '01:80:c2:00:00:00':
+            '''
             receivedBPDU = eBPDU()
             receivedBPDU.decode(dgram)
             
                 
             p.vector = copy.deepcopy(receivedBPDU)
-            p.vector.msg_age += 265
+            p.vector.msg_age += 256
             p.vector.local_port = fromPort
             if isEqualBPDU(p.vector, bridge_bpdu):
                 bridge_bpdu.msg_age = p.vector.msg_age
@@ -137,8 +138,9 @@ def receive(s):
                 bridge_bpdu.root_cost = p.vector.root_cost + 10
                 bridge_bpdu.msg_age = p.vector.msg_age
                 bridge_bpdu.local_port = p.vector.local_port
-                #should we update the bridge_id
+                bridge_bpdu.root_id = p.vector.root_id
                 root_port = fromPort
+            '''
             for x in portInfos:
                 if x.port == root_port:
                     if x.logic != 'Root':
@@ -146,16 +148,36 @@ def receive(s):
                         x.forward = 'Listening'
                         x.timer = 15
                 if x.port != root_port:
+                    tmp = copy.deepcopy(bridge_bpdu)
+
                     if isBetterBPDU(bridge_bpdu, x.vector):
                         if x.logic != 'Designated':
                             x.logic = 'Designated'
                             x.forward = 'Listening'
                             x.timer = 15
-                    else:
+                    if isBetterBPDU(x.vector, bridge_bpdu):
                         if x.logic != 'Blocked':
                             x.logic = 'Blocked'
+                            x.forward = 'Blocked'
                             x.timer = 0
-                            
+                #print 'port {} is forward: {}, cost {}'.format(x.port, x.forward, x.vector.root_cost)
+
+            receivedBPDU = eBPDU()
+            receivedBPDU.decode(dgram)
+
+
+            p.vector = copy.deepcopy(receivedBPDU)
+            p.vector.msg_age += 256
+            p.vector.local_port = fromPort
+            if isEqualBPDU(p.vector, bridge_bpdu):
+                bridge_bpdu.msg_age = p.vector.msg_age
+            #spanning tree operations
+            if isBetterBPDU(p.vector, bridge_bpdu):
+                bridge_bpdu.root_cost = p.vector.root_cost + 10
+                bridge_bpdu.msg_age = p.vector.msg_age
+                bridge_bpdu.local_port = p.vector.local_port
+                bridge_bpdu.root_id = p.vector.root_id
+                root_port = fromPort 
 
 
 
@@ -188,10 +210,10 @@ def sendBPDU():
     global portInfos
     global bridge_bpdu
     
-    tmp = copy.deepcopy(bridge_bpdu)
     while True:
         time.sleep(2)
         for x in portInfos:
+            tmp = copy.deepcopy(bridge_bpdu)
             tmp.port_id = int(x.port)
             tmp.bridge_id = mymac
             x.socket.send(tmp.encode())

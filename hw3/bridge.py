@@ -46,7 +46,8 @@ class BridgeTableEntry:
         self.port = port
         self.age = age
 
-                           
+
+# class to decode BPDU                           
 class eBPDU:
     def __init__(self, local_port = -1, root_id = '00:00:00:00:00:00', bridge_id = '00:00:00:00:00:00', port_id = None, root_cost = 0, root_pri = '\x80\x00', bridge_pri = '\x80\x00', msg_age = 0):
         self.root_pri = root_pri
@@ -57,17 +58,20 @@ class eBPDU:
         self.port_id = port_id
         self.msg_age = msg_age
         self.local_port = local_port
-        
+    
+    # decoding a package
     def decode(self, packet):
         self.dst, self.src, self.llc, packetLength, protocol, version, typeP, flags, self.root_pri, self.root_id, self.root_cost, self.bridge_pri, self.bridge_id, self.port_id, self.msg_age = struct.unpack('6s 6s 2s 3s 2s s s s 2s 6s 4s 2s 6s 2s 2s', packet[0:46])
         self.msg_age = int(to_hex(self.msg_age), 0)
         self.port_id = int(to_hex(self.port_id), 0)
         self.root_cost = int(to_hex(self.root_cost), 0)
-        
+    
+    #encoding a package    
     def encode(self):
         return '\x01\x80\xc2\x00\x00\x00' + self.bridge_id + '\x00\x26\x42\x42\x03\x00\x00\x00\x00\x00' + self.root_pri + self.root_id + format(self.root_cost, '08x').decode('hex') + self.bridge_pri + self.bridge_id + format(self.port_id, '04x').decode('hex') + format(self.msg_age, '04x').decode('hex') + '\x14\x00\x02\x00\x0f\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
 
+# stores information of each port
 class PortInfo:
     def __init__(self, socket, port, vector, logic = 'Designated', forward = 'Listening', timer = 15):
         self.socket = socket
@@ -77,7 +81,7 @@ class PortInfo:
         self.timer = timer
         self.vector = vector
 
- 
+#if BPDU a is better than b returns T/F 
 def isBetterBPDU(a, b):
     if (a.bridge_pri < b.bridge_pri):
         return True
@@ -91,12 +95,14 @@ def isBetterBPDU(a, b):
         return True
     return False
 
+#if BPDU a is equal as b returns T/F
 def isEqualBPDU(a, b):
     if not isBetterBPDU(a, b) and not isBetterBPDU(b, a):
         return True
     else:
         return False
 
+#what to do when a BPDU arrives
 def receive(s):
     global bridgeTable
     global portInfos
@@ -181,7 +187,7 @@ def receive(s):
 
 
 
-# learning bridge stuff
+# removing timeout entry from the learning brdig etable 
 def timeCounter():
     global currentTime
     global bridgeTable
@@ -192,6 +198,7 @@ def timeCounter():
             x.age += 1
         bridgeTable[:] = [x for x in bridgeTable if x.age < 15]
 
+#timeout for the port every one second
 def portTimer():
     global portInfos
     while True:
@@ -205,7 +212,7 @@ def portTimer():
                     if (x.forward == 'Listening'):
                         x.timer = 15
                         x.forward = 'Learning'
-
+#sending BPDU every 2 seconds
 def sendBPDU():
     global portInfos
     global bridge_bpdu
@@ -218,6 +225,7 @@ def sendBPDU():
             tmp.bridge_id = mymac
             x.socket.send(tmp.encode())
 
+#creating the BPDU timeout
 def eBPDUTimeout():
     global portInfos
     global no_bridge
@@ -237,13 +245,14 @@ def eBPDUTimeout():
                 root_port = -1
         
             
-        
+#is the src in the learning bridge table        
 def containInTable(table, src):
     for x in table:
         if (x.mac == src):
             return x.port
     return -1
 
+#update or create entry in the learning brdige table
 def updateOrCreateTableEntry(bridgeTable, src, fromPort, age = 0):
     if (containInTable(bridgeTable, src) != -1):
         for x in bridgeTable:
@@ -253,7 +262,7 @@ def updateOrCreateTableEntry(bridgeTable, src, fromPort, age = 0):
     else:
         bridgeTable.append(BridgeTableEntry(src, fromPort))
 
-
+#gets the socket to forward too
 def getSocketForForwarding(bridgeTable, portInfos, dst, fromPort):
     if (containInTable(bridgeTable, dst) == -1):
         return [x.socket for x in portInfos if (fromPort != x.port and x.forward == 'Forwarding')]

@@ -63,7 +63,7 @@ if __name__ == '__main__':
         '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
         '\x02\x00\x01\x75\x97\x52' #src ethr
         '\x08\x00\x45\x00' #type
-        '\x00\x36' #len
+        '\x00\x28' #len
         '\x00\x01' #ID
         '\x00\x00\x40\x06'
         '\x04\xde' #checksum

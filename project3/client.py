@@ -104,9 +104,7 @@ if __name__ == '__main__':
         '\x00\x00'
     )
 
-    f = open("hexdump","w") #opens file with name of "test.txt"
-    f.write(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)
-    f.close()
+    
     send(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)
     #send(INITIAL_SYN)
     tmp = recv()

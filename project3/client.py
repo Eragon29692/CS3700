@@ -8,11 +8,15 @@ import random
 
 def send(pkt):
     global s
+    global fp
     hdr = struct.pack('!H', len(pkt))
     s.send(hdr + pkt)
+    phdr = struct.pack("IIII", 0, 0, len(pkt), len(pkt))
+    fp.write(phdr + pkt)
 
 def recv():
     global s
+    global fp
     hdr = s.recv(2)
     pktlen = struct.unpack('!H', hdr)[0]
     return s.recv(pktlen)
@@ -32,7 +36,10 @@ def ip_cksum(pkt):
 if __name__ == '__main__':
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
     s.connect(('login-faculty.ccs.neu.edu', 5025))
-    
+    fp = open("log.pcap", "w")
+    fhdr = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 65536, 1);
+    fp.write(fhdr)
+ 
     INITIAL_ARP = (
         '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
         '\x02\x00\x01\x75\x97\x52' #src ethr

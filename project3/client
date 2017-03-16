@@ -66,7 +66,7 @@ if __name__ == '__main__':
         '\x00\x28' #len
         '\x00\x01' #ID
         '\x00\x00\x40\x06'
-        '\x04\xde' #checksum
+        '\x04\xec' #checksum
         '\x0a\xAF\x61\x34'
         '\x0a\x00\x00\x01'
     ) 
@@ -78,7 +78,7 @@ if __name__ == '__main__':
         '\x50' #offest = 5
         '\x02' #SYN
         '\x05\x78' #window
-        '\x00\x00\x00\x00'
+        '\xee\xfa\x00\x00'
     )
 
     #print ip_cksum(INITIAL_SYN)
@@ -100,7 +100,7 @@ if __name__ == '__main__':
         '\x50' #offest = 5
         '\x02' #SYN
         '\x05\x78' #window
-        '\x00\x00' #checksum
+        '\xee\xfa' #checksum
         '\x00\x00'
     )
 

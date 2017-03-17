@@ -82,27 +82,6 @@ if __name__ == '__main__':
     )
 
     #print ip_cksum(INITIAL_SYN)
-    
-    INITIAL_SYN = (
-        '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
-        '\x02\x00\x01\x75\x97\x52' #src ethr
-        '\x08\x00\x45\x00' #type
-        '\x00\x36' #len
-        '\x00\x01' #ID
-        '\x00\x00\x40\x06'
-        '\xce\xf9' #checksum
-        '\x0a\xAF\x61\x34'
-        '\x0a\x00\x00\x01'
-        '\x30\x31'#random src port
-        '\x00\x50' #port 80
-        '\x0a\x00\x00\x01'
-        '\x00\x00\x00\x00'
-        '\x50' #offest = 5
-        '\x02' #SYN
-        '\x05\x78' #window
-        '\xee\xfa' #checksum
-        '\x00\x00'
-    )
 
     
     send(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)

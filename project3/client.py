@@ -60,25 +60,26 @@ if __name__ == '__main__':
     portRand = format(random.randint(10, 99), '02x').decode('hex')
     print portRand      
     INITIAL_SYN1 = (
-        '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
-        '\x02\x00\x01\x75\x97\x52' #src ethr
-        '\x08\x00\x45\x00' #type
+        '\xFF\xFF\xFF\xFF\xFF\xFF' #dst addres...
+        '\x02\x00\x01\x75\x97\x52' #src addres...
+        '\x08\x00\x45\x00' #type...
         '\x00\x28' #len
         '\x00\x01' #ID
-        '\x00\x00\x40\x06'
-        '\x04\xec' #checksum
-        '\x0a\xAF\x61\x34'
-        '\x0a\x00\x00\x01'
+        '\x00\x00\x40\x06'#ttl + protocal...
+        '\x04\xec' #ip checksum
+        '\x0a\xAF\x61\x34'#ip of src...
+        '\x0a\x00\x00\x01'#ip of dest...
     ) 
     INITIAL_SYN2 = (
-        #random src port
-        '\x00\x50' #port 80
-        '\x0a\x00\x00\x01'
-        '\x00\x00\x00\x00'
-        '\x50' #offest = 5
+        #random src port =  portRand + portRand
+        '\x00\x50' #port 80...
+        '\x0a\x00\x00\x01'#sequence number
+        '\x00\x00\x00\x00'#ackowledge number
+        '\x50' #offest = 5...
         '\x02' #SYN
-        '\x05\x78' #window
-        '\xee\xfa\x00\x00'
+        '\x05\x78' #window size...
+        '\xee\xfa' #tcp checksum
+        '\x00\x00' #urgent...
     )
 
     #print ip_cksum(INITIAL_SYN)

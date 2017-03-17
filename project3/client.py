@@ -19,7 +19,10 @@ def recv():
     global fp
     hdr = s.recv(2)
     pktlen = struct.unpack('!H', hdr)[0]
-    return s.recv(pktlen)
+    pkt = s.recv(pktlen)
+    phdr = struct.pack("IIII", 0, 0, len(pkt), len(pkt))
+    fp.write(phdr + pkt)
+    return pkt
 
 def ip_cksum(pkt):
     if len(pkt) & 1:

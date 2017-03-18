@@ -6,6 +6,11 @@ import binascii
 import struct 
 import random
 
+# hex string addition. Convert hex byte string to hex number string. Exp: '\x12\x34' -> '0x1234'
+# then convert to int number, add it with integer add. Then return the new hex byte string
+def hex_addition(n, add):
+    return format(int('0x' + "".join(("{:02x}".format(ord(c))) for c in n), 0) + add, '0' + str(len(n) * 2) + 'x').decode('hex')
+
 def send(pkt):
     global s
     global fp
@@ -35,26 +40,26 @@ def ip_cksum(pkt):
     return sum ^ 0xffff
 
 class Packet:
-    def __init__(self, packetId = '\x00\x01', ipchecksum = '\x04\xec', seqNum = '\x0a\x00\x00\x01', ackNum = '\x00\x00\x00\x00', flag = '\x02', tcpchecksum = '\xee\xfa', data = ''):
+    def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x0a\x00\x00\x00', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
         self.packetId = packetId
         self.ipchecksum = ipchecksum
         self.seqNum = seqNum
         self.ackNum = ackNum
-        self.flag = flag
+        #self.flag = flag
         self.tcpchecksum = tcpchecksum
         self.data = data
 
     def decode(self, packet):
-        self.packetId = struct.unpack('2s', packet[18:20])
-        self.ipchecksum = struct.unpack('2s', packet[24:26])
+        #self.packetId = struct.unpack('2s', packet[18:20])
+        #self.ipchecksum = struct.unpack('2s', packet[24:26])
         self.seqNum = struct.unpack('4s', packet[38:42])
         self.ackNum = struct.unpack('4s', packet[42:46])
-        self.flag = struct.unpack('4s', packet[47:48])
-        self.tcpchecksum = struct.unpack('4s', packet[50:52])
+        #self.flag = struct.unpack('4s', packet[47:48])
+        #self.tcpchecksum = struct.unpack('4s', packet[50:52])
 
-    def buildPackage(self):
-        portRand = format(random.randint(10, 99), '02x').decode('hex')
-        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + '\x00\x28' + self.packetId + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + self.flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + self.data
+    def buildPackage(self, seqAdd = 1, ackAdd = 0, flag = '\x02'):
+        portRand = format(random.randint(4096, 65535), '04x').decode('hex')
+        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + '\x00\x28' + hex_addition(self.packetId, 1) + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + hex_addition(self.seqNum, seqAdd) + hex_addition(self.ackNum, ackAdd) + '\x50' + flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + self.data
 
 # main
 if __name__ == '__main__':
@@ -83,35 +88,9 @@ if __name__ == '__main__':
 
     portRand = format(random.randint(10, 99), '02x').decode('hex')
           
-    INITIAL_SYN1 = (
-        '\x02\x00\x00\x00\x00\x01' #dst addres...
-        '\x02\x00\x01\x75\x97\x52' #src addres...
-        '\x08\x00\x45\x00' #type...
-        '\x00\x28' #len
-        '\x00\x01' #ID
-        '\x00\x00\x40\x06'#ttl + protocal...
-        '\x04\xec' #ip checksum
-        '\x0a\xAF\x61\x34'#ip of src...
-        '\x0a\x00\x00\x01'#ip of dest...
-    ) 
-    INITIAL_SYN2 = (
-        #random src port =  portRand + portRand
-        '\x00\x50' #port 80...
-        '\x0a\x00\x00\x01'#sequence number
-        '\x00\x00\x00\x00'#ackowledge number
-        '\x50' #offest = 5...
-        '\x02' #SYN
-        '\x05\x78' #window size...
-        '\xee\xfa' #tcp checksum
-        '\x00\x00' #urgent...
-    )
-
-    #print ip_cksum(INITIAL_SYN)
-
-    
-    #send(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)
     send(myPacket.buildPackage())
     tmp = recv()
     print binascii.hexlify(tmp)
+    
 
 

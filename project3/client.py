@@ -34,6 +34,27 @@ def ip_cksum(pkt):
         sum = (sum & 0xffff) + (sum >> 16)
     return sum ^ 0xffff
 
+class Packet:
+    def __init__(self, packetId = '\x00\x01', ipchecksum = '\x04\xec', seqNum = '\x0a\x00\x00\x01', ackNum = '\x00\x00\x00\x00', flag = '\x02', tcpchecksum = '\xee\xfa', data = ''):
+        self.packetId = packetId
+        self.ipchecksum = ipchecksum
+        self.seqNum = seqNum
+        self.ackNum = ackNum
+        self.flag = flag
+        self.tcpchecksum = tcpchecksum
+        self.data = data
+
+    def decode(self, packet):
+        self.packetId = struct.unpack('2s', packet[18:20])
+        self.ipchecksum = struct.unpack('2s', packet[24:26])
+        self.seqNum = struct.unpack('4s', packet[38:42])
+        self.ackNum = struct.unpack('4s', packet[42:46])
+        self.flag = struct.unpack('4s', packet[47:48])
+        self.tcpchecksum = struct.unpack('4s', packet[50:52])
+
+    def buildPackage(self):
+        portRand = format(random.randint(10, 99), '02x').decode('hex')
+        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + '\x00\x28' + self.packetId + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + self.flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + self.data
 
 # main
 if __name__ == '__main__':
@@ -42,7 +63,7 @@ if __name__ == '__main__':
     fp = open("log.pcap", "w")
     fhdr = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 65536, 1);
     fp.write(fhdr)
- 
+    myPacket = Packet()
     INITIAL_ARP = (
         '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
         '\x02\x00\x01\x75\x97\x52' #src ethr
@@ -61,7 +82,7 @@ if __name__ == '__main__':
     print binascii.hexlify(tmp)
 
     portRand = format(random.randint(10, 99), '02x').decode('hex')
-    print portRand      
+          
     INITIAL_SYN1 = (
         '\x02\x00\x00\x00\x00\x01' #dst addres...
         '\x02\x00\x01\x75\x97\x52' #src addres...
@@ -88,8 +109,8 @@ if __name__ == '__main__':
     #print ip_cksum(INITIAL_SYN)
 
     
-    send(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)
-    #send(INITIAL_SYN)
+    #send(INITIAL_SYN1 + portRand + portRand + INITIAL_SYN2)
+    send(myPacket.buildPackage())
     tmp = recv()
     print binascii.hexlify(tmp)
 

@@ -49,17 +49,20 @@ class Packet:
         self.tcpchecksum = tcpchecksum
         self.data = data
 
+    #update this package with the received packet
     def decode(self, packet):
         #self.packetId = struct.unpack('2s', packet[18:20])
         #self.ipchecksum = struct.unpack('2s', packet[24:26])
-        self.seqNum = struct.unpack('4s', packet[38:42])
-        self.ackNum = struct.unpack('4s', packet[42:46])
+        #self.seqNum = struct.unpack('4s', packet[38:42]) 
+        #self.ackNum = struct.unpack('4s', packet[38:42]) #ackSeq is the received seqNum
+        self.ackNum = packet[38:42]
         #self.flag = struct.unpack('4s', packet[47:48])
         #self.tcpchecksum = struct.unpack('4s', packet[50:52])
 
-    def buildPackage(self, seqAdd = 1, ackAdd = 0, flag = '\x02'):
+
+    def buildPacket(self, seqAdd = 0, ackAdd = 0, flag = '\x02', data = ''):
         portRand = format(random.randint(4096, 65535), '04x').decode('hex')
-        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + '\x00\x28' + hex_addition(self.packetId, 1) + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + hex_addition(self.seqNum, seqAdd) + hex_addition(self.ackNum, ackAdd) + '\x50' + flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + self.data
+        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + hex_addition(self.packetId, 1) + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + hex_addition(self.seqNum, 1 + seqAdd) + hex_addition(self.ackNum, ackAdd) + '\x50' + flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + data
 
 # main
 if __name__ == '__main__':
@@ -81,16 +84,25 @@ if __name__ == '__main__':
         '\x00\x00\x00\x00\x00\x00' #target ether
         '\x0a\x00\x00\x01' #target ip
     )
-    
+
+    #(1) -------- ARP REQ ------->
+    #<-------- ARP REPLY -------
     send(INITIAL_ARP)
     tmp = recv()
     print binascii.hexlify(tmp)
 
-    portRand = format(random.randint(10, 99), '02x').decode('hex')
-          
-    send(myPacket.buildPackage())
+    #(2) --------- SYN ----------> (a)
+    #<-------- SYN|ACK --------- (b)
+    #----------- ACK ----------> (c)
+    send(myPacket.buildPacket())
     tmp = recv()
     print binascii.hexlify(tmp)
+    myPacket.decode(tmp)
+    send(myPacket.buildPacket(0, 1,'\x0A'))
+
+    
+
+    
     
 
 

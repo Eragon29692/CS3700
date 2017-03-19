@@ -40,31 +40,39 @@ def ip_cksum(pkt):
         sum = (sum & 0xffff) + (sum >> 16)
     return sum ^ 0xffff
 
+
+
 class Packet:
     def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x00\x00\x00\x00', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
         self.packetId = packetId
         self.ipchecksum = ipchecksum
         self.seqNum = seqNum
         self.ackNum = ackNum
-        #self.flag = flag
         self.tcpchecksum = tcpchecksum
         self.data = data
+        #a random port for sending packets
         self.portRand = format(random.randint(4096, 65535), '04x').decode('hex')
 
     #update this package with the received packet
     def decode(self, packet):
-        #ackSeq is the received seqNum
+        #ackSeq is the received seqNum of the recevied packet
         self.ackNum = packet[38:42]
-
+    
+    #calculate the Ip checksum
     def buildIpChecksum(self, data = ''):
         return format(ip_cksum('\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06\x0a\xAF\x61\x34\x0a\x00\x00\x01'), '04x').decode('hex')
 
+    #calculate the tcp checksum
     def buildTCPChecksum(self, port = '', seqNum = '', ackNum = '',flag = '', data = ''):
         return format(ip_cksum('\x0a\xAF\x61\x34\x0a\x00\x00\x01\x00\x06' + hex_addition('\x00\x14', len(data)) + port + '\x00\x50' +seqNum + ackNum + '\x50' + flag + '\x05\x78\x00\x00' + data), '04x').decode('hex')
 
+    #building the packet for sending
     def buildPacket(self, seqAdd = 0, ackAdd = 0, flag = '\x02', data = ''):
+        #increment packetId by 1
         self.packetId = hex_addition(self.packetId, 1)
+        #increase seqNum with param  
         self.seqNum = hex_addition(self.seqNum, seqAdd)
+        #increase ackNum with param
         self.ackNum = hex_addition(self.ackNum, ackAdd)
         return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06' + self.buildIpChecksum(data) + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + self.portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + flag + '\x05\x78' + self.buildTCPChecksum(self.portRand, self.seqNum, self.ackNum, flag, data) + '\x00\x00' + data
 
@@ -89,45 +97,84 @@ if __name__ == '__main__':
         '\x00\x00\x00\x00\x00\x00' #target ether
         '\x0a\x00\x00\x01' #target ip
     )
-    
+
+    #--------------------------------------------------------------------    
 
     #(1) -------- ARP REQ ------->
     #<-------- ARP REPLY -------
-    send(INITIAL_ARP)
-    tmp = recv()
-    print binascii.hexlify(tmp)
 
+    # ARP REQ
+    send(INITIAL_ARP)
+    # ARP REPLY
+    tmp = recv()
+    #print binascii.hexlify(tmp)
+
+    #--------------------------------------------------------------------
 
     #(2) --------- SYN ----------> (a)
     #<-------- SYN|ACK --------- (b)
     #----------- ACK ----------> (c)
+
+    #(a)
     send(myPacket.buildPacket())
+    #(b)
     tmp = recv()
-    print binascii.hexlify(tmp)
+    #print binascii.hexlify(tmp)
+    #(c)
+    #update ackNum
     myPacket.decode(tmp)
+    #Add 1 to seqNum for flag SYN in (a)
+    #Add 1 to ackNum to ackowledge flag SYN|ACK in (b)
+    #\x10 is flag ACK
     send(myPacket.buildPacket(1, 1, '\x10'))
 
+    #--------------------------------------------------------------------
+
     #(3) -- "GET / HTTP/1.0\n\n"->
-    #<----------- ACK ---------- 
+    #<----------- ACK ----------
+
+    # "GET / HTTP/1.0\n\n"
     getData = '\x47\x45\x54\x20\x2f\x20\x48\x54\x54\x50\x2f\x31\x2e\x30\x0d\x0a\x0d\x0a'
+    #not increase seqNum since last send is ACK and no data at (2(c) 
+    #not increase ackNum since no packet received since the last send in (2)(c)
+    #\x10 is flag ACK
     send(myPacket.buildPacket(0, 0,'\x10', getData))
+    # ACK
     tmp = recv()
-    myPacket.decode(tmp)
-    print binascii.hexlify(tmp)
-    
+    #print binascii.hexlify(tmp)
+
+    #-------------------------------------------------------------------
+
     #(4)<-- HTTP/1.1 200 OK... ---
     #----------- ACK ---------->
+
+    # HTTP/1.1 200 OK...
     tmp = recv()
-    myPacket.decode(tmp)
-    dataReceived = tmp[54:]
+    print '\nFull HTTP Request in bytes:'
     print binascii.hexlify(tmp)
-    
+    print '\nHTTP Request content decoded:'
+    print binascii.hexlify(tmp[54:]).decode('hex')
+    # ACK
+    myPacket.decode(tmp)
+    #Add 18 to seqNum for 18 bytes send in (3) getData
+    #Add 1 to ackNum to acknowledge HTTP/1.1 200 OK
+    #\x10 is flag ACK
+    send(myPacket.buildPacket(18, 1,'\x10'))
+  
+    #--------------------------------------------------------------------
+  
     #(5) <---- FIN | ACK ---------(a)
     #--------FIN | ACK -------->(b)
+
+    #(a)
     tmp = recv()
+    #print binascii.hexlify(tmp)
+    #(b)
     myPacket.decode(tmp)
-    print binascii.hexlify(tmp)
-    send(myPacket.buildPacket(18, len(dataReceived),'\x11'))
+    #not increase seqNum since last send is ACK and no data at (4)ACK
+    #Add 1 to ackNum to ackowledge flag FIN|ACK in 5(a)
+    #\x11 is FIN|ACK flag
+    send(myPacket.buildPacket(0, 1,'\x11'))
     
 
 

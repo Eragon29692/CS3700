@@ -49,6 +49,7 @@ class Packet:
         #self.flag = flag
         self.tcpchecksum = tcpchecksum
         self.data = data
+        self.portRand = format(random.randint(4096, 65535), '04x').decode('hex')
 
     #update this package with the received packet
     def decode(self, packet):
@@ -68,10 +69,10 @@ class Packet:
 
     def buildPacket(self, seqAdd = 0, ackAdd = 0, flag = '\x02', data = ''):
         self.packetId = hex_addition(self.packetId, 1)
-        self.seqNum = hex_addition(self.seqNum, 1 + seqAdd)
+        self.seqNum = hex_addition(self.seqNum, seqAdd)
         self.ackNum = hex_addition(self.ackNum, ackAdd)
-        portRand = format(random.randint(4096, 65535), '04x').decode('hex')
-        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06' + self.buildIpChecksum(data) + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + flag + '\x05\x78' + self.buildTCPChecksum(portRand, self.seqNum, self.ackNum, flag, data) + '\x00\x00' + data
+        #portRand = format(random.randint(4096, 65535), '04x').decode('hex')
+        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06' + self.buildIpChecksum(data) + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + self.portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + flag + '\x05\x78' + self.buildTCPChecksum(self.portRand, self.seqNum, self.ackNum, flag, data) + '\x00\x00' + data
 
 # main
 if __name__ == '__main__':
@@ -81,6 +82,7 @@ if __name__ == '__main__':
     fhdr = struct.pack("IHHIIII", 0xa1b2c3d4, 2, 4, 0, 0, 65536, 1);
     fp.write(fhdr)
     myPacket = Packet()
+
     INITIAL_ARP = (
         '\xFF\xFF\xFF\xFF\xFF\xFF' #dst ethr
         '\x02\x00\x01\x75\x97\x52' #src ethr
@@ -101,7 +103,6 @@ if __name__ == '__main__':
     tmp = recv()
     print binascii.hexlify(tmp)
 
-    time.sleep(1)
 
     #(2) --------- SYN ----------> (a)
     #<-------- SYN|ACK --------- (b)
@@ -110,11 +111,14 @@ if __name__ == '__main__':
     tmp = recv()
     print binascii.hexlify(tmp)
     
-    time.sleep(1)
     
     myPacket.decode(tmp)
-    send(myPacket.buildPacket(0, 1,'\x10'))
+    send(myPacket.buildPacket(1, 1,'\x10'))
 
+    #(3) -- "GET / HTTP/1.0\n\n"->
+    #<----------- ACK ----------
+    data = '\x47\x45\x54\x20\x2f\x20\x48\x54\x54\x50\x2f\x31\x2e\x30\x0d\x0a\x0d\x0a'
+    send(myPacket.buildPacket(1 + len(data), len(data), '\x10', data))
     tmp = recv()
     print binascii.hexlify(tmp)
     

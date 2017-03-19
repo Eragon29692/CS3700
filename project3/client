@@ -117,8 +117,8 @@ if __name__ == '__main__':
 
     #(3) -- "GET / HTTP/1.0\n\n"->
     #<----------- ACK ----------
-    data = '\x47\x45\x54\x20\x2f\x20\x48\x54\x54\x50\x2f\x31\x2e\x30\x0d\x0a\x0d\x0a'
-    send(myPacket.buildPacket(len(data), 0,'\x10', data))
+    getData = '\x47\x45\x54\x20\x2f\x20\x48\x54\x54\x50\x2f\x31\x2e\x30\x0d\x0a\x0d\x0a'
+    send(myPacket.buildPacket(1, 0,'\x10', getData))
     tmp = recv()
     print binascii.hexlify(tmp)
     

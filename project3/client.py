@@ -113,7 +113,7 @@ if __name__ == '__main__':
     
     
     myPacket.decode(tmp)
-    send(myPacket.buildPacket(1, 1,'\x10'))
+    send(myPacket.buildPacket(0, 1,'\x10'))
 
     #(3) -- "GET / HTTP/1.0\n\n"->
     #<----------- ACK ----------
@@ -122,7 +122,11 @@ if __name__ == '__main__':
     tmp = recv()
     print binascii.hexlify(tmp)
     
-
+    #(4)<-- HTTP/1.1 200 OK... ---
+    #----------- ACK ---------->
+    tmp = recv()
+    print binascii.hexlify(tmp)
+    
     
     
 

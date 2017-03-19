@@ -40,7 +40,7 @@ def ip_cksum(pkt):
     return sum ^ 0xffff
 
 class Packet:
-    def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x0a\x00\x00\x00', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
+    def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x00\x00\x00\x01', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
         self.packetId = packetId
         self.ipchecksum = ipchecksum
         self.seqNum = seqNum
@@ -59,10 +59,18 @@ class Packet:
         #self.flag = struct.unpack('4s', packet[47:48])
         #self.tcpchecksum = struct.unpack('4s', packet[50:52])
 
+    def buildIpChecksum(self, data = ''):
+        return format(ip_cksum('\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06\x0a\xAF\x61\x34\x0a\x00\x00\x01'), '04x').decode('hex')
+
+    def buildTCPChecksum(self, port = '', seqNum = '', ackNum = '',flag = '', data = ''):
+        return format(ip_cksum('\x0a\xAF\x61\x34\x0a\x00\x00\x01\x00\x06' + hex_addition('\x00\x14', len(data)) + port + '\x00\x50' +seqNum + ackNum + '\x50' + flag + '\x05\x78\x00\x00' + data), '04x').decode('hex')
 
     def buildPacket(self, seqAdd = 0, ackAdd = 0, flag = '\x02', data = ''):
+        self.packetId = hex_addition(self.packetId, 1)
+        self.seqNum = hex_addition(self.seqNum, 1 + seqAdd)
+        self.ackNum = hex_addition(self.ackNum, ackAdd)
         portRand = format(random.randint(4096, 65535), '04x').decode('hex')
-        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + hex_addition(self.packetId, 1) + '\x00\x00\x40\x06' + self.ipchecksum + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + hex_addition(self.seqNum, 1 + seqAdd) + hex_addition(self.ackNum, ackAdd) + '\x50' + flag + '\x05\x78' + self.tcpchecksum + '\x00\x00' + data
+        return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06' + self.buildIpChecksum(data) + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + flag + '\x05\x78' + self.buildTCPChecksum(portRand, self.seqNum, self.ackNum, flag, data) + '\x00\x00' + data
 
 # main
 if __name__ == '__main__':
@@ -84,6 +92,7 @@ if __name__ == '__main__':
         '\x00\x00\x00\x00\x00\x00' #target ether
         '\x0a\x00\x00\x01' #target ip
     )
+    
 
     #(1) -------- ARP REQ ------->
     #<-------- ARP REPLY -------
@@ -97,8 +106,9 @@ if __name__ == '__main__':
     send(myPacket.buildPacket())
     tmp = recv()
     print binascii.hexlify(tmp)
+    #print myPacket.buildIpChecksum('')
     myPacket.decode(tmp)
-    send(myPacket.buildPacket(0, 1,'\x0A'))
+    send(myPacket.buildPacket(0, 1,'\x10'))
 
     
 

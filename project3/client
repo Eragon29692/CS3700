@@ -53,13 +53,8 @@ class Packet:
 
     #update this package with the received packet
     def decode(self, packet):
-        #self.packetId = struct.unpack('2s', packet[18:20])
-        #self.ipchecksum = struct.unpack('2s', packet[24:26])
-        #self.seqNum = struct.unpack('4s', packet[38:42]) 
-        #self.ackNum = struct.unpack('4s', packet[38:42]) #ackSeq is the received seqNum
+        #ackSeq is the received seqNum
         self.ackNum = packet[38:42]
-        #self.flag = struct.unpack('4s', packet[47:48])
-        #self.tcpchecksum = struct.unpack('4s', packet[50:52])
 
     def buildIpChecksum(self, data = ''):
         return format(ip_cksum('\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06\x0a\xAF\x61\x34\x0a\x00\x00\x01'), '04x').decode('hex')
@@ -71,7 +66,6 @@ class Packet:
         self.packetId = hex_addition(self.packetId, 1)
         self.seqNum = hex_addition(self.seqNum, seqAdd)
         self.ackNum = hex_addition(self.ackNum, ackAdd)
-        #portRand = format(random.randint(4096, 65535), '04x').decode('hex')
         return '\x02\x00\x00\x00\x00\x01\x02\x00\x01\x75\x97\x52\x08\x00\x45\x00' + hex_addition('\x00\x28', len(data)) + self.packetId + '\x00\x00\x40\x06' + self.buildIpChecksum(data) + '\x0a\xAF\x61\x34\x0a\x00\x00\x01' + self.portRand + '\x00\x50' + self.seqNum + self.ackNum + '\x50' + flag + '\x05\x78' + self.buildTCPChecksum(self.portRand, self.seqNum, self.ackNum, flag, data) + '\x00\x00' + data
 
 # main
@@ -110,24 +104,30 @@ if __name__ == '__main__':
     send(myPacket.buildPacket())
     tmp = recv()
     print binascii.hexlify(tmp)
-    
-    
     myPacket.decode(tmp)
     send(myPacket.buildPacket(1, 1, '\x10'))
 
     #(3) -- "GET / HTTP/1.0\n\n"->
-    #<----------- ACK ---------- [Optional] 
+    #<----------- ACK ---------- 
     getData = '\x47\x45\x54\x20\x2f\x20\x48\x54\x54\x50\x2f\x31\x2e\x30\x0d\x0a\x0d\x0a'
     send(myPacket.buildPacket(0, 0,'\x10', getData))
     tmp = recv()
+    myPacket.decode(tmp)
     print binascii.hexlify(tmp)
     
     #(4)<-- HTTP/1.1 200 OK... ---
     #----------- ACK ---------->
     tmp = recv()
+    myPacket.decode(tmp)
+    dataReceived = tmp[54:]
     print binascii.hexlify(tmp)
     
-    
+    #(5) <---- FIN | ACK ---------(a)
+    #--------FIN | ACK -------->(b)
+    tmp = recv()
+    myPacket.decode(tmp)
+    print binascii.hexlify(tmp)
+    send(myPacket.buildPacket(18, len(dataReceived),'\x11'))
     
 
 

@@ -5,6 +5,7 @@ import string
 import binascii
 import struct 
 import random
+import time
 
 # hex string addition. Convert hex byte string to hex number string. Exp: '\x12\x34' -> '0x1234'
 # then convert to int number, add it with integer add. Then return the new hex byte string
@@ -40,7 +41,7 @@ def ip_cksum(pkt):
     return sum ^ 0xffff
 
 class Packet:
-    def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x00\x00\x00\x01', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
+    def __init__(self, packetId = '\x00\x00', ipchecksum = '\x04\xec', seqNum = '\x00\x00\x00\x00', ackNum = '\x00\x00\x00\x00', tcpchecksum = '\xee\xfa', data = ''):
         self.packetId = packetId
         self.ipchecksum = ipchecksum
         self.seqNum = seqNum
@@ -100,16 +101,22 @@ if __name__ == '__main__':
     tmp = recv()
     print binascii.hexlify(tmp)
 
+    time.sleep(1)
+
     #(2) --------- SYN ----------> (a)
     #<-------- SYN|ACK --------- (b)
     #----------- ACK ----------> (c)
     send(myPacket.buildPacket())
     tmp = recv()
     print binascii.hexlify(tmp)
-    #print myPacket.buildIpChecksum('')
+    
+    time.sleep(1)
+    
     myPacket.decode(tmp)
     send(myPacket.buildPacket(0, 1,'\x10'))
 
+    tmp = recv()
+    print binascii.hexlify(tmp)
     
 
     

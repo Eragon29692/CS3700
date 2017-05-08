@@ -1,0 +1,125 @@
+#!/usr/bin/python
+#
+# creates a set of "wires" that hosts and bridges can connect to and exchange packets.
+# By default it creates 10 "wires" - to connect to e.g. wire 3, you need to establish
+# a SEQPACKET connection to the address '\0<name>.wire.3' where <name> is your current
+# user id (i.e. the one you logged into the machine with)
+#
+# You can't run multiple copies of this program on the same machine under the same
+# user ID, or else they'll try to use the same addresses.
+#
+# note that each "wire" acts like an ethernet hub - if you have more than 2 processes
+# connected to it, a packet received on one connection will be sent to all the others.
+#
+# In addition you can fail and restore individual wires - if you run 'wire --fail #' or
+# 'wire --fix #' it will send a message to your running wire process and tell it to stop
+# forwarding frames on that wire or to resume again.
+#
+# The '--verbose' option tells it to print packets as they are forwarded. If you bind 
+# your socket to a useful name before connecting (see 'host' for an example), that name
+# will be included in the printout.
+#
+
+import sys
+import threading
+import socket
+import argparse
+import select
+import string
+import getpass
+
+parser = argparse.ArgumentParser(description='Wire - connect bridges')
+parser.add_argument('--fail', metavar='n', type=int, help='take down wire <n>')
+parser.add_argument('--fix', metavar='n', type=int, help='bring wire <n> back up')
+parser.add_argument('--verbose', action='store_true', help='print transmitted packets')
+parser.add_argument('nwires', metavar='N', type=int, nargs='?', default=10,
+                    help='number of wires (default 10)')
+args = parser.parse_args()
+
+# and the main part
+#
+def print_pkt(n1, n2, pkt):
+    print '%s -> %s' % (n1, n2)
+    bytes = map(lambda x: '%02x' % ord(x), buffer(pkt)[:])
+    for i in range(0,len(bytes),16):
+        print '%04x' % i, string.join(bytes[i:i+16], ' ')
+    
+# a single wire - accept connections on "wire.#", and forward packets between
+# connections. Runs as a separate thread.
+#
+def transfer(i):
+    sockets = []
+    names = dict()
+    ls = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    ls.bind('\0%s.wire.%d' % (getpass.getuser(), i))
+    ls.listen(2)
+    
+    # note that 'accept' counts as a read for the purposes of select
+    #
+    while True:
+        ready, ignore1, ignore2 = select.select(sockets + [ls], (), ())
+        for r in ready:
+            if r == ls:
+                s2,addr = r.accept()
+                names[s2] = addr
+                sockets.append(s2)
+                print 'connection from', addr
+            else:
+                dgram = r.recv(1500)
+                if not dgram:
+                    print 'closed', names[r]
+                    sockets.remove(r)
+                    del names[r]
+                    r.close()
+                elif not failed[i]:
+                    for s in set(sockets) - set([r]):
+                        s.send(dgram)
+                        if args.verbose:
+                            print_pkt(names[r], names[s], dgram)
+
+def run_wires(nwires):
+    global failed
+
+    # start the receivers
+    #
+    threads = [threading.Thread(target=transfer, args=[i]) for i in range(nwires)]
+    for t in threads:
+        t.daemon = True                   # so ^C works
+        t.start()
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    s.bind('\0%s.wire.ctl' % getpass.getuser())
+
+    # and handle fail/fix messages
+    #
+    while True:
+        dgram = s.recv(1024)
+        if not dgram:
+            break
+        print dgram
+        i = int(dgram[4:])
+        if dgram[0:4] == 'FAIL':
+            failed[i] = True
+        elif dgram[0:4] == 'FIX ':
+            failed[i] = False
+        else:
+            break
+    
+# send a FAIL/FIX message to other process
+#
+def send_msg(port, fail):
+    msg = '%s %d' % ('FAIL' if fail else 'FIX ', port)
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    s.sendto(msg, '\0%s.wire.ctl' % getpass.getuser())
+
+    sys.exit()
+    sys.exit()
+
+
+if __name__ == '__main__':
+    if args.fail is not None:                 # might be wire 0
+        send_msg(args.fail, True)
+    elif args.fix is not None:
+        send_msg(args.fix, False)
+    else:
+        failed = [False] * args.nwires
+        run_wires(args.nwires)

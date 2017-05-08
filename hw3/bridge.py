@@ -82,12 +82,12 @@ class PortInfo:
         self.vector = vector
 
 #if BPDU a is better than b returns T/F 
-def isBetterBPDU(a, b):
+def isBetterBPDU(a, b, cost_reduce = 0):
     if (a.bridge_pri < b.bridge_pri):
         return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id < b.bridge_id):
         return True
-    if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost < b.root_cost):
+    if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost - cost_reduce < b.root_cost):
         return True
     if (a.bridge_pri == b.bridge_pri and a.bridge_id == b.bridge_id and a.root_cost == b.root_cost and a.port_id < b.port_id):
         return True
@@ -129,24 +129,30 @@ def receive(s):
                 x.send(dgram)
 
         if ether_ntoa(dst) == '01:80:c2:00:00:00':
-            '''
+            
             receivedBPDU = eBPDU()
             receivedBPDU.decode(dgram)
             
                 
             p.vector = copy.deepcopy(receivedBPDU)
             p.vector.msg_age += 256
+            #p.vector.root_cost += 10
             p.vector.local_port = fromPort
             if isEqualBPDU(p.vector, bridge_bpdu):
                 bridge_bpdu.msg_age = p.vector.msg_age
             #spanning tree operations
             if isBetterBPDU(p.vector, bridge_bpdu):
-                bridge_bpdu.root_cost = p.vector.root_cost + 10
-                bridge_bpdu.msg_age = p.vector.msg_age
-                bridge_bpdu.local_port = p.vector.local_port
-                bridge_bpdu.root_id = p.vector.root_id
-                root_port = fromPort
-            '''
+                flag = True
+            for x in portInfos:
+                if isBetterBPDU(p.vector, bridge_bpdu):
+                    if (flag):
+                        bridge_bpdu.root_cost = x.vector.root_cost + 10
+                        flag = False
+                    bridge_bpdu.msg_age = x.vector.msg_age
+                    bridge_bpdu.local_port = x.vector.local_port
+                    bridge_bpdu.root_id = x.vector.root_id
+                    root_port = x.port
+            
             for x in portInfos:
                 if x.port == root_port:
                     if x.logic != 'Root':
@@ -167,23 +173,6 @@ def receive(s):
                             x.forward = 'Blocked'
                             x.timer = 0
                 #print 'port {} is forward: {}, cost {}'.format(x.port, x.forward, x.vector.root_cost)
-
-            receivedBPDU = eBPDU()
-            receivedBPDU.decode(dgram)
-
-
-            p.vector = copy.deepcopy(receivedBPDU)
-            p.vector.msg_age += 256
-            p.vector.local_port = fromPort
-            if isEqualBPDU(p.vector, bridge_bpdu):
-                bridge_bpdu.msg_age = p.vector.msg_age
-            #spanning tree operations
-            if isBetterBPDU(p.vector, bridge_bpdu):
-                bridge_bpdu.root_cost = p.vector.root_cost + 10
-                bridge_bpdu.msg_age = p.vector.msg_age
-                bridge_bpdu.local_port = p.vector.local_port
-                bridge_bpdu.root_id = p.vector.root_id
-                root_port = fromPort 
 
 
 

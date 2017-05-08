@@ -1,0 +1,145 @@
+#!/usr/bin/python
+#
+# creates a "message hub" that nodes can use to communicate with each other
+# It creates 8 endpoints for nodes to connect to - e.g. node <i> makes
+# a SEQPACKET connection to the address '\0<name>.bus.<i>' where <name> is your 
+# username
+#
+# You can't run multiple copies of this program on the same machine under the same
+# user ID, or else they'll try to use the same addresses.
+#
+
+import sys
+import threading
+import socket
+import argparse
+import select
+import string
+import getpass
+
+parser = argparse.ArgumentParser(description='Bus - project 5 message bus')
+parser.add_argument('--verbose', action='store_true', help='print transmitted messages')
+parser.add_argument('--quiet', action='store_true', help='don\'t print anything')
+args = parser.parse_args()
+
+sockets = [None] * 8
+socket_map = dict()
+
+maplock = threading.Lock()
+printlock = threading.Lock()
+def print_msg(f, t, msg):
+    m = '-> ' + '\n-> '.join(msg.split('\n')) + '\n'
+    printlock.acquire()
+    print m
+    printlock.release()
+
+# a single endpoint - accept connections on "bus.#", and forward packets between
+# connections. Runs as a separate thread.
+#
+def transfer(i):
+    global sockets
+    
+    ls = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    ls.bind('\0%s.bus.%d' % (getpass.getuser(), i))
+    ls.listen(2)
+    
+    while True:
+        s,addr = ls.accept()
+        print 'connection on %d' % i
+        sockets[i] = s
+        while True:
+            dgram = None
+            try:
+                dgram = s.recv(4096)
+            except:
+                pass
+
+            if not dgram or not dgram.startswith('To: '):
+                s.close()
+                sockets[i] = None
+                break
+
+            d = dict(filter(lambda x: len(x)==2, [line.split(': ') for line in dgram.split('\n')]))
+            t,id = int(d['To']),int(d['Id'])
+            if args.verbose:
+                print_msg(i, t, dgram)
+            if t < 8:
+                if sockets[t]:
+                    sockets[t].send(dgram)
+            else:
+                # fix race condition vs. 'del socket_map[id]' in client_transfer()
+                maplock.acquire()
+                if id in socket_map:
+                    socket_map[id].send(dgram)
+                    socket_map[id].close()
+                    del socket_map[id]
+                maplock.release()
+
+client_sockets = []
+
+def client_transfer():
+    global sockets
+    ls = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    my_sockets = []
+    ls.bind('\0%s.bus.%d' % (getpass.getuser(), 8))
+    ls.listen(2)
+
+    while True:
+        all_sockets = my_sockets + [socket_map[i] for i in socket_map] + [ls]
+        ready, ignore1, badones = select.select(all_sockets , (), all_sockets)
+        for r in ready:
+            if r == ls:
+                s2,addr = r.accept()
+                my_sockets.append(s2)
+            else:
+                try:
+                    dgram = r.recv(4096)
+                except:
+                    print 'exception: dgram none, socket:', r
+                    dgram = None
+                if not dgram or not dgram.startswith('To: '):
+                    if r in client_sockets:
+                        client_sockets.remove(r)
+
+                    maplock.acquire()
+                    if r in socket_map.values():
+                        for k,v in socket_map.items():
+                            if v == r:
+                                del socket_map[k]
+                    maplock.release()
+
+                    if r in my_sockets:
+                        my_sockets.remove(r)
+                    r.close()
+                    continue
+
+                # forward from client to a node, leave map entry for reply
+                d = dict(filter(lambda x: len(x)==2, [line.split(': ') for line in dgram.split('\n')]))
+                t = int(d['To'])
+                if args.verbose:
+                    print_msg(8, t, dgram)
+
+                if 0 <= t < 8 and sockets[t]:
+                    socket_map[int(d['Id'])] = r
+                    sockets[t].send(dgram)
+                else:
+                    r.close()
+                my_sockets.remove(r)
+
+def start_thread(function, i):
+    t = threading.Thread(target=function, args=[i])
+    t.daemon = True
+    t.start()
+    
+def run_bus():
+    # start the receivers
+    #
+    [start_thread(transfer, i) for i in range(8)]
+
+    client_transfer()
+
+if __name__ == '__main__':
+    try:
+        run_bus()
+    except KeyboardInterrupt:
+        sys.exit(0)

@@ -1,0 +1,77 @@
+Project 5 - Distributed Key-Value Store, due Monday 4/24
+
+(note that in order to meet the grade submission deadline, there is little or no room for slip days)
+
+For this assignment you will create a distributed key-value store using consistent hashing (with full-knowledge 1-hop routing) and triple replication. 
+
+Deliverables:
+
+'proj5' - an executable taking a single argument, the node number (0 through 7 - see below)
+'people' - CCIS user names, one per line
+'Makefile' - if necessary
+
+As before, your code should run on unmodified CCIS machines (e.g. login.ccs.neu.edu), although if you have any strange language requests not supported by those machines (e.g. a recent version of Rust, or Python 3.5 instead of 3.4) let me know and we *may* be able to accomodate it.
+
+Libraries etc.:
+
+I think it's extremely unlikely that there are any libraries out there which would offer an unfair advantage in completing this assignment. (a library for parsing HTTP or Sendmail-style headers might be useful, but is not unfair) All code must be typed in by your own hands, with the following exceptions: (a) code posted on Piazza or provided in your repository, and (b) non-standard libraries copied to your repository and acknowledged as such.
+
+Communication details
+
+As with project 2 we will use a message bus ('bus' in your repo) and UNIX SEQPACKET sockets. If your user id is <name>, node <i> will connect to "\0<name>.bus.<i>". (e.g. in python, "\0%s.bus.%d" % (getpass.getuser(), nodenum)) Code fragments for C and Python are provided in your repository. When receiving messages, be sure to pass a buffer of 4096 bytes or larger.
+
+Consistent hashing and replication
+
+Eight copies of your program (in the no-failure case) will run at the same time, with node numbers 0 through 7. We will use an 8-bit consistent hashing ring (i.e. circumference 256), with nodes 0 through 7 assigned locations 0, 32, 64, 96, 128, 160, 192, and 224. (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0) Keys are hashed by summing their bytes modulo 255, and stored on (a) the node with closest location <= that hash, and (b) the two following nodes.
+
+In other words, if h = hash(key), then the key is mapped to node n = int(h/0x20) and replicas n+1 and n+2 (mod 8). 
+
+node-to-node messages:
+
+exchanging HTTP-like (i.e. text-format) messages in the following format:
+
+To: #
+From: #
+Cmd: <cmd>
+Id: ddd
+Key: <key>
+Value: <value>
+
+'To:' and 'From:' values are 1-digit node numbers 0-7, or '8' indicating a user 'put' or 'get' request.
+'Cmd:' is one of the following strings - 'put', 'get', 'ok', 'fail', 'store', 'fetch', 'reload'
+'Id:' is a decimal integer identifying the message; a reply ('ok' or 'fail') to this message should include the same message id.
+'Key:' - all the bytes after ': ' and before '\n'
+'Value:' - all the bytes after ': ' and before '\n'. (thus we can't store text with newlines in our key/value store. Oh well.)
+
+Messages (except for client requests) are sent with a 1s timeout - if you don't receive a reply, you can assume the node is down.
+
+Protocol operation
+
+'Cmd: put' - this is a client request. Calculate the destination nodes n, n+1, n+2, and send a 'store' message to each of them. When you have a reply from one of them, return 'Cmd: ok' to the client, making sure to use the correct 'Id:' field. If none of the three nodes are reachable (i.e. don't respond within a 1s timeout) send 'Cmd: fail' to the client. Note that it's OK to try each of the three nodes in sequence, so it takes 3s in the worst case.
+
+'Cmd: store' - this is a node-to-node request. Store the key/value pair in your internal database and return 'Cmd: ok'. 
+
+'Cmd: get' - client request. Calculate the destination nodes n, n+1, n+2 and send a 'fetch' request to each of them in turn (again with a 1s timeout); if one if them replies then return 'Cmd: ok' with the appropriate 'Id:', 'Key:', and 'Value:' fields; otherwise return 'Cmd: fail'.
+
+'Cmd: fetch' - node-to-node request. Look up the requested key and return it in a 'Cmd: ok' message; if not found, return 'Cmd: fail'. 
+
+Failure recovery and 'Cmd: reload'
+
+Data is stored in memory (in whatever data structure you want) and so is lost when a node crashes due to adverse events such as ^C. When node n restarts, it will send 'Cmd: reload' to nodes n-2, n-1, n+1, and n+2, and then will begin processing messages without waiting for a response.
+
+'Cmd: reload' - on receiving this from node n, find all keys in your your internal database which would be replicated to node n. For each such key, send 'Cmd: store' to node n and wait for a response.
+
+Threads, asynchrony, whatever
+
+Note that in a number of cases you will need to handle incoming messages while you are waiting for a reply from another node. (it's most obvious in the 'Cmd: reload' case, but can also come up when e.g. one node is waiting for a reply from another which has crashed)
+
+Testing
+
+A test client is provided in your repo:
+
+./client <n> get <key>
+./client <n> put <key> <value>
+
+where <n> is node number (0-7) and <key> and <value> are arbitrary strings
+
+
